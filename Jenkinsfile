@@ -39,7 +39,7 @@ pipeline {
           agent { label 'linux_64' }
           steps {
             script {
-              def utils = load "/home/semen/ASC-OFFICE/documents-pipeline/utils.groovy"
+              def utils = load "utils.groovy"
               if ( params.linux_64 ) {
                 utils.linuxBuild(env.BRANCH_NAME, "linux_64", params.clean)
               }
