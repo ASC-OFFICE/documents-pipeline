@@ -1,4 +1,4 @@
-def checkoutRepo(String repo, String branch = 'master', String company = 'ONLYOFFICE') {
+def checkoutRepo(String repo, String branch = 'develop', String company = 'ONLYOFFICE') {
     checkout([
             $class: 'GitSCM',
             branches: [[
@@ -40,7 +40,7 @@ def getReposList()
     return repos
 }
 
-def checkoutRepos(String branch = 'master')
+def checkoutRepos(String branch = 'develop')
 {    
     for (repo in getReposList()) {
         if( repo != 'r7' ) {
@@ -66,7 +66,7 @@ def tagRepos(String tag)
 
     return this
 }
-def linuxBuild(String branch = 'master', String platform = 'native', Boolean clean = true)
+def linuxBuild(String branch = 'develop', String platform = 'native', Boolean clean = true)
 {
     checkoutRepos(branch)
     sh "cd build_tools && \
@@ -121,7 +121,7 @@ def linuxBuild(String branch = 'master', String platform = 'native', Boolean cle
     return this
 }
 
-def windowsBuild(String branch = 'master', String platform = 'native', Boolean clean = true)
+def windowsBuild(String branch = 'develop', String platform = 'native', Boolean clean = true)
 {
     checkoutRepos(branch)
 
