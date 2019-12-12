@@ -11,7 +11,6 @@ pipeline {
       description: '',
       name: 'linux_64'
     )
-    /*
     booleanParam (
       defaultValue: true,
       description: '',
@@ -32,7 +31,6 @@ pipeline {
       description: '',
       name: 'win_32_xp'
     )
-    */
   }
   triggers {
     cron('H 20 * * *')
@@ -68,7 +66,6 @@ pipeline {
             }
           }
         }
-        /*
         stage('Windows 64-bit build') {
           agent {
             node {
@@ -139,7 +136,6 @@ pipeline {
             }
           }
         }
-        */
       }
     }
   }
