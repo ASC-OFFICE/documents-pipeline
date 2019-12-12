@@ -1,4 +1,4 @@
-def checkoutRepo(String repo, String branch = 'develop', String company = 'ONLYOFFICE') {
+def checkoutRepo(String repo, String branch = 'master', String company = 'ONLYOFFICE') {
     checkout([
             $class: 'GitSCM',
             branches: [[
@@ -40,7 +40,7 @@ def getReposList()
     return repos
 }
 
-def checkoutRepos(String branch = 'develop')
+def checkoutRepos(String branch = 'master')
 {    
     for (repo in getReposList()) {
         if( repo != 'r7' ) {
@@ -61,12 +61,12 @@ def tagRepos(String tag)
             git tag -l | xargs git tag -d && \
             git fetch --tags && \
             git tag ${tag} && \
-	        git push origin --tags"
+            git push origin --tags"
     }
 
     return this
 }
-def linuxBuild(String branch = 'develop', String platform = 'native', Boolean clean = true)
+def linuxBuild(String branch = 'master', String platform = 'native', Boolean clean = true)
 {
     checkoutRepos(branch)
     sh "cd build_tools && \
@@ -121,7 +121,7 @@ def linuxBuild(String branch = 'develop', String platform = 'native', Boolean cl
     return this
 }
 
-def windowsBuild(String branch = 'develop', String platform = 'native', Boolean clean = true)
+def windowsBuild(String branch = 'master', String platform = 'native', Boolean clean = true)
 {
     checkoutRepos(branch)
 
@@ -157,7 +157,7 @@ def windowsBuild(String branch = 'develop', String platform = 'native', Boolean 
             mingw32-make clean &&\
             mingw32-make deploy"
 
-        /*
+    /*
         String winSdkVersion = '10.0.14393.0'
         String platformType
         
@@ -175,7 +175,6 @@ def windowsBuild(String branch = 'develop', String platform = 'native', Boolean 
         bat "cd core && \
             call \"C:\\Program Files (x86)\\Microsoft Visual Studio 14.0\\VC\\vcvarsall.bat\" ${platformType} ${winSdkVersion} && \
             mingw32-make deploy"
-        */
 
         publishHTML([
                 allowMissing: true,
@@ -188,5 +187,6 @@ def windowsBuild(String branch = 'develop', String platform = 'native', Boolean 
                 reportTitles: ''
             ]
         )
+    */
     }
 }

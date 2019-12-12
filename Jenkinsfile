@@ -11,6 +11,28 @@ pipeline {
       description: '',
       name: 'linux_64'
     )
+    /*
+    booleanParam (
+      defaultValue: true,
+      description: '',
+      name: 'win_64'
+    )
+    booleanParam (
+      defaultValue: false,
+      description: '',
+      name: 'win_32'
+    )
+    booleanParam (
+      defaultValue: false,
+      description: '',
+      name: 'win_64_xp'
+    )
+    booleanParam (
+      defaultValue: false,
+      description: '',
+      name: 'win_32_xp'
+    )
+    */
   }
   triggers {
     cron('H 20 * * *')
@@ -46,6 +68,78 @@ pipeline {
             }
           }
         }
+        /*
+        stage('Windows 64-bit build') {
+          agent {
+            node {
+              label 'win_64'
+              customWorkspace "C:\\r7\\${env.BRANCH_NAME}\\win_64"
+            }
+          }
+          steps {
+            script {
+              def utils = load "utils.groovy"
+              if ( params.win_64 ) {
+                utils.windowsBuild(env.BRANCH_NAME, "win_64", params.clean)
+              }
+            }
+          }
+        }
+        stage('Windows 32-bit build') {
+          agent {
+            node {
+              label 'win_32'
+              customWorkspace "C:\\r7\\${env.BRANCH_NAME}\\win_32"
+            }
+          }
+          steps {
+            script {
+              def utils = load "utils.groovy"
+              if ( params.win_32 ) {
+                utils.windowsBuild(env.BRANCH_NAME, "win_32", params.clean)
+              }
+            }
+          }
+        }
+        stage('Windows XP 64-bit build') {
+          agent {
+            node {
+              label 'win_64_xp'
+              customWorkspace "C:\\x8\\${env.BRANCH_NAME}"
+            }
+          }
+          environment {
+            _WIN_XP = '1'
+          }
+          steps {
+            script {
+              def utils = load "utils.groovy"
+              if ( params.win_64_xp ) {
+                utils.windowsBuild(env.BRANCH_NAME, "win_64_xp", params.clean)
+              }
+            }
+          }
+        }
+        stage('Windows XP 32-bit build') {
+          agent {
+            node {
+              label 'win_32_xp'
+              customWorkspace "C:\\x4\\${env.BRANCH_NAME}"
+            }
+          }
+          environment {
+            _WIN_XP = '1'
+          }
+          steps {
+            script {
+              def utils = load "utils.groovy"
+              if ( params.win_32_xp ) {
+                utils.windowsBuild(env.BRANCH_NAME, "win_32_xp", params.clean)
+              }
+            }
+          }
+        }
+        */
       }
     }
   }
