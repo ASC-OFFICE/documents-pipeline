@@ -2,7 +2,7 @@ def checkoutRepo(String repo, String branch = 'master', String company = 'ONLYOF
     checkout([
             $class: 'GitSCM',
             branches: [[
-                    name: branch
+                    name: "develop"
                 ]
             ],
             doGenerateSubmoduleConfigurations: false,
