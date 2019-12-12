@@ -61,7 +61,7 @@ def tagRepos(String tag)
             git tag -l | xargs git tag -d && \
             git fetch --tags && \
             git tag ${tag} && \
-            git push origin --tags"
+	        git push origin --tags"
     }
 
     return this
@@ -82,9 +82,9 @@ def linuxBuild(String branch = 'master', String platform = 'native', Boolean cle
     sh "cd desktop-apps/win-linux/package/linux &&\
          make clean &&\
          make deploy"
+    /*
     sh "cd document-builder-package &&\
          make deploy"
-    /*
     sh "cd core && \
         make deploy"
     */
@@ -99,6 +99,7 @@ def linuxBuild(String branch = 'master', String platform = 'native', Boolean cle
             reportTitles: ''
         ]
     )
+    /*
     publishHTML([
             allowMissing: false,
             alwaysLinkToLastBuild: false,
@@ -111,7 +112,6 @@ def linuxBuild(String branch = 'master', String platform = 'native', Boolean cle
         ]
     )
 
-    /*
     checkoutRepo('doc-builder-testing')
     sh "docker rmi doc-builder-testing || true"
     sh "cd doc-builder-testing &&\
@@ -152,12 +152,12 @@ def windowsBuild(String branch = 'master', String platform = 'native', Boolean c
             reportTitles: ''
         ]
     )
+    /*
     if ( !platform.endsWith('_xp') ) {
         bat "cd document-builder-package &&\
             mingw32-make clean &&\
             mingw32-make deploy"
 
-    /*
         String winSdkVersion = '10.0.14393.0'
         String platformType
         
@@ -187,6 +187,6 @@ def windowsBuild(String branch = 'master', String platform = 'native', Boolean c
                 reportTitles: ''
             ]
         )
-    */
     }
+    */
 }
