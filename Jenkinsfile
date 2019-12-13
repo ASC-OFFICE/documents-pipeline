@@ -53,7 +53,6 @@ pipeline {
           env.PUBLISHER_URL = "http://r7-office.ru"
           env.SUPPORT_URL = "http://support.r7-office.ru"
           env.SUPPORT_MAIL = "support@r7-office.ru"
-          env.QT_PATH = "/usr/bin"
         }
       }
     }
@@ -70,6 +69,7 @@ pipeline {
             }
           }
         }
+        /*
         stage('Windows 64-bit build') {
           agent {
             node {
@@ -140,6 +140,7 @@ pipeline {
             }
           }
         }
+        */
       }
     }
   }
