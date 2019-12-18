@@ -146,13 +146,15 @@ pipeline {
       }
     }
     stage('Packaging') {
-      stage('Linux 64-bit packaging') {
-        agent { label 'linux_64' }
-        steps {
-          script {
-            def utils = load "utils.groovy"
-            if ( params.linux_64 ) {
-              utils.linuxPackaging(env.BRANCH_NAME, "linux_64", params.clean)
+      steps {
+        stage('Linux 64-bit packaging') {
+          agent { label 'linux_64' }
+          steps {
+            script {
+              def utils = load "utils.groovy"
+              if ( params.linux_64 ) {
+                utils.linuxPackaging(env.BRANCH_NAME, "linux_64", params.clean)
+              }
             }
           }
         }
