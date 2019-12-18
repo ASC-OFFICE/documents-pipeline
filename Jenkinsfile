@@ -153,6 +153,7 @@ pipeline {
             def utils = load "utils.groovy"
             if ( params.linux_64 ) {
               utils.linuxPackaging(env.BRANCH_NAME, "linux_64", params.clean)
+            }
           }
         }
       }
