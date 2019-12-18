@@ -11,6 +11,7 @@ pipeline {
       description: '',
       name: 'linux_64'
     )
+    /*
     booleanParam (
       defaultValue: true,
       description: '',
@@ -31,6 +32,7 @@ pipeline {
       description: '',
       name: 'win_32_xp'
     )
+    */
   }
   triggers {
     cron('H 20 * * *')

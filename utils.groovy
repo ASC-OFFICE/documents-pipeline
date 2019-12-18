@@ -1,4 +1,4 @@
-def checkoutRepo(String repo, String branch = 'master', String company = 'ONLYOFFICE') {
+def checkoutRepo(String repo, String branch = 'develop', String company = 'ONLYOFFICE') {
     checkout([
             $class: 'GitSCM',
             branches: [[
@@ -40,7 +40,7 @@ def getReposList()
     return repos
 }
 
-def checkoutRepos(String branch = 'master')
+def checkoutRepos(String branch = 'develop')
 {    
     for (repo in getReposList()) {
         if( repo != 'r7' ) {
@@ -66,7 +66,8 @@ def tagRepos(String tag)
 
     return this
 }
-def linuxBuild(String branch = 'master', String platform = 'native', Boolean clean = true)
+
+def linuxBuild(String branch = 'develop', String platform = 'native', Boolean clean = true)
 {
     checkoutRepos(branch)
     sh "cd build_tools && \
@@ -74,20 +75,20 @@ def linuxBuild(String branch = 'master', String platform = 'native', Boolean cle
             --module \"desktop builder core\"\
             --platform ${platform}\
             --update false\
-            --branch ${branch}\
-            --branding r7\
+            --branch develop\
             --clean ${clean.toString()}\
             --qt-dir \$QT_PATH &&\
         ./make.py"
+    /*
     sh "cd desktop-apps/win-linux/package/linux &&\
          make clean &&\
          make deploy"
-    /*
+    */
     sh "cd document-builder-package &&\
          make deploy"
+    /*
     sh "cd core && \
         make deploy"
-    */
     publishHTML([
             allowMissing: false,
             alwaysLinkToLastBuild: false,
@@ -99,7 +100,7 @@ def linuxBuild(String branch = 'master', String platform = 'native', Boolean cle
             reportTitles: ''
         ]
     )
-    /*
+    */
     publishHTML([
             allowMissing: false,
             alwaysLinkToLastBuild: false,
@@ -111,7 +112,7 @@ def linuxBuild(String branch = 'master', String platform = 'native', Boolean cle
             reportTitles: ''
         ]
     )
-
+    /*
     checkoutRepo('doc-builder-testing')
     sh "docker rmi doc-builder-testing || true"
     sh "cd doc-builder-testing &&\
@@ -121,6 +122,7 @@ def linuxBuild(String branch = 'master', String platform = 'native', Boolean cle
     return this
 }
 
+/*
 def windowsBuild(String branch = 'master', String platform = 'native', Boolean clean = true)
 {
     checkoutRepos(branch)
@@ -152,7 +154,7 @@ def windowsBuild(String branch = 'master', String platform = 'native', Boolean c
             reportTitles: ''
         ]
     )
-    /*
+
     if ( !platform.endsWith('_xp') ) {
         bat "cd document-builder-package &&\
             mingw32-make clean &&\
@@ -188,5 +190,6 @@ def windowsBuild(String branch = 'master', String platform = 'native', Boolean c
             ]
         )
     }
-    */
+
 }
+*/
