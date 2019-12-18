@@ -84,8 +84,7 @@ def linuxBuild(String branch = 'develop', String platform = 'native', Boolean cl
          make clean &&\
          make deploy"
     */
-    sh "cd document-builder-package &&\
-        make all -e SRC='../build_tools/out/linux_64/onlyoffice/documentbuilder/*'"
+
     /*
     sh "cd core && \
         make deploy"
@@ -101,6 +100,22 @@ def linuxBuild(String branch = 'develop', String platform = 'native', Boolean cl
         ]
     )
     */
+
+    /*
+    checkoutRepo('doc-builder-testing')
+    sh "docker rmi doc-builder-testing || true"
+    sh "cd doc-builder-testing &&\
+        docker build --tag doc-builder-testing -f dockerfiles/debian-develop/Dockerfile . &&\
+        docker run --rm doc-builder-testing parallel_rspec spec -n 2"
+    */
+    return this
+}
+
+def linuxPackaging(String branch = 'develop', String platform = 'native', Boolean clean = true)
+{
+    sh "cd document-builder-package &&\
+        make clean &&\
+        make all -e SRC='../build_tools/out/linux_64/onlyoffice/documentbuilder/*'"
     publishHTML([
             allowMissing: false,
             alwaysLinkToLastBuild: false,
@@ -112,13 +127,6 @@ def linuxBuild(String branch = 'develop', String platform = 'native', Boolean cl
             reportTitles: ''
         ]
     )
-    /*
-    checkoutRepo('doc-builder-testing')
-    sh "docker rmi doc-builder-testing || true"
-    sh "cd doc-builder-testing &&\
-        docker build --tag doc-builder-testing -f dockerfiles/debian-develop/Dockerfile . &&\
-        docker run --rm doc-builder-testing parallel_rspec spec -n 2"
-    */
     return this
 }
 
