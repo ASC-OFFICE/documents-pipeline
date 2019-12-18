@@ -85,7 +85,7 @@ def linuxBuild(String branch = 'develop', String platform = 'native', Boolean cl
          make deploy"
     */
     sh "cd document-builder-package &&\
-         make deploy"
+        make all -e SRC='../build_tools/out/linux_64/onlyoffice/documentbuilder/*'"
     /*
     sh "cd core && \
         make deploy"
