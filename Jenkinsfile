@@ -146,7 +146,7 @@ pipeline {
       }
     }
     stage('Packaging') {
-      steps {
+      parallel {
         stage('Linux 64-bit packaging') {
           agent { label 'linux_64' }
           steps {
