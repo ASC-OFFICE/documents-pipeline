@@ -115,7 +115,7 @@ def linuxPackaging(String branch = 'develop', String platform = 'native', Boolea
 {
     sh "cd document-builder-package &&\
         make clean &&\
-        make all -e SRC='../build_tools/out/linux_64/onlyoffice/documentbuilder/*'"
+        make deb rpm -e SRC='../build_tools/out/linux_64/onlyoffice/documentbuilder/*'"
     publishHTML([
             allowMissing: false,
             alwaysLinkToLastBuild: false,
