@@ -76,29 +76,22 @@ def linuxBuild(String branch = 'develop', String platform = 'native', Boolean cl
             --platform ${platform}\
             --update false\
             --branch develop\
+            --branding r7\
             --clean ${clean.toString()}\
             --qt-dir \$QT_PATH &&\
         ./make.py"
-    sh "cd document-builder-package &&\
-        make clean &&\
-        make deb rpm index.html -e SRC='../build_tools/out/linux_64/onlyoffice/documentbuilder/*'"
-    publishHTML([
-            allowMissing: false,
-            alwaysLinkToLastBuild: false,
-            includes: 'index.html',
-            keepAll: true,
-            reportDir: 'document-builder-package',
-            reportFiles: 'index.html',
-            reportName: "DocumentBuilder(${platform})",
-            reportTitles: ''
-        ]
-    )
     /*
     sh "cd desktop-apps/win-linux/package/linux &&\
          make clean &&\
          make deploy"
+    */
+    sh "cd document-builder-package &&\
+        make clean &&\
+        make deb rpm index.html -e SRC='../build_tools/out/linux_64/onlyoffice/documentbuilder/*'"
+    /*
     sh "cd core && \
         make deploy"
+
     publishHTML([
             allowMissing: false,
             alwaysLinkToLastBuild: false,
@@ -107,6 +100,19 @@ def linuxBuild(String branch = 'develop', String platform = 'native', Boolean cl
             reportDir: 'desktop-apps-ext/win-linux/package/linux',
             reportFiles: 'index.html',
             reportName: "DesktopEditors(${platform})",
+            reportTitles: ''
+        ]
+    )
+    */
+
+    publishHTML([
+            allowMissing: false,
+            alwaysLinkToLastBuild: false,
+            includes: 'index.html',
+            keepAll: true,
+            reportDir: 'document-builder-package',
+            reportFiles: 'index.html',
+            reportName: "DocumentBuilder(${platform})",
             reportTitles: ''
         ]
     )
@@ -120,7 +126,6 @@ def linuxBuild(String branch = 'develop', String platform = 'native', Boolean cl
     return this
 }
 
-/*
 def windowsBuild(String branch = 'master', String platform = 'native', Boolean clean = true)
 {
     checkoutRepos(branch)
@@ -152,7 +157,7 @@ def windowsBuild(String branch = 'master', String platform = 'native', Boolean c
             reportTitles: ''
         ]
     )
-
+    /*
     if ( !platform.endsWith('_xp') ) {
         bat "cd document-builder-package &&\
             mingw32-make clean &&\
@@ -188,6 +193,5 @@ def windowsBuild(String branch = 'master', String platform = 'native', Boolean c
             ]
         )
     }
-
+    */
 }
-*/
