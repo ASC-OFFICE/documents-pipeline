@@ -79,13 +79,24 @@ def linuxBuild(String branch = 'develop', String platform = 'native', Boolean cl
             --clean ${clean.toString()}\
             --qt-dir \$QT_PATH &&\
         ./make.py"
+    sh "cd document-builder-package &&\
+        make clean &&\
+        make deb rpm index.html -e SRC='../build_tools/out/linux_64/onlyoffice/documentbuilder/*'"
+    publishHTML([
+            allowMissing: false,
+            alwaysLinkToLastBuild: false,
+            includes: 'index.html',
+            keepAll: true,
+            reportDir: 'document-builder-package',
+            reportFiles: 'index.html',
+            reportName: "DocumentBuilder(${platform})",
+            reportTitles: ''
+        ]
+    )
     /*
     sh "cd desktop-apps/win-linux/package/linux &&\
          make clean &&\
          make deploy"
-    */
-
-    /*
     sh "cd core && \
         make deploy"
     publishHTML([
@@ -99,34 +110,13 @@ def linuxBuild(String branch = 'develop', String platform = 'native', Boolean cl
             reportTitles: ''
         ]
     )
-    */
 
-    /*
     checkoutRepo('doc-builder-testing')
     sh "docker rmi doc-builder-testing || true"
     sh "cd doc-builder-testing &&\
         docker build --tag doc-builder-testing -f dockerfiles/debian-develop/Dockerfile . &&\
         docker run --rm doc-builder-testing parallel_rspec spec -n 2"
     */
-    return this
-}
-
-def linuxPackaging(String branch = 'develop', String platform = 'native', Boolean clean = true)
-{
-    sh "cd document-builder-package &&\
-        make clean &&\
-        make deb rpm -e SRC='../build_tools/out/linux_64/onlyoffice/documentbuilder/*'"
-    publishHTML([
-            allowMissing: false,
-            alwaysLinkToLastBuild: false,
-            includes: 'index.html',
-            keepAll: true,
-            reportDir: 'document-builder-package',
-            reportFiles: 'index.html',
-            reportName: "DocumentBuilder(${platform})",
-            reportTitles: ''
-        ]
-    )
     return this
 }
 
