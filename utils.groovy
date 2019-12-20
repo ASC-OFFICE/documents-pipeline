@@ -66,7 +66,6 @@ def tagRepos(String tag)
 
     return this
 }
-
 def linuxBuild(String branch = 'develop', String platform = 'native', Boolean clean = true)
 {
     checkoutRepos(branch)
@@ -76,22 +75,19 @@ def linuxBuild(String branch = 'develop', String platform = 'native', Boolean cl
             --platform ${platform}\
             --update false\
             --branch develop\
-            --branding r7\
             --clean ${clean.toString()}\
             --qt-dir \$QT_PATH &&\
         ./make.py"
-    /*
     sh "cd desktop-apps/win-linux/package/linux &&\
          make clean &&\
          make deploy"
-    */
     sh "cd document-builder-package &&\
         make clean &&\
         make deb rpm index.html -e SRC='../build_tools/out/linux_64/onlyoffice/documentbuilder/*'"
     /*
     sh "cd core && \
         make deploy"
-
+    */
     publishHTML([
             allowMissing: false,
             alwaysLinkToLastBuild: false,
@@ -103,7 +99,6 @@ def linuxBuild(String branch = 'develop', String platform = 'native', Boolean cl
             reportTitles: ''
         ]
     )
-    */
 
     publishHTML([
             allowMissing: false,
@@ -158,11 +153,10 @@ def windowsBuild(String branch = 'master', String platform = 'native', Boolean c
             reportTitles: ''
         ]
     )
-    /*
     if ( !platform.endsWith('_xp') ) {
         bat "cd document-builder-package &&\
             mingw32-make clean &&\
-            mingw32-make deploy"
+            mingw32-make deploy -e SRC='../build_tools/out/linux_64/onlyoffice/documentbuilder/*'"
 
         String winSdkVersion = '10.0.14393.0'
         String platformType
@@ -178,9 +172,11 @@ def windowsBuild(String branch = 'master', String platform = 'native', Boolean c
                 platformType = ''
         }
 
+        /*
         bat "cd core && \
             call \"C:\\Program Files (x86)\\Microsoft Visual Studio 14.0\\VC\\vcvarsall.bat\" ${platformType} ${winSdkVersion} && \
             mingw32-make deploy"
+        */
 
         publishHTML([
                 allowMissing: true,
@@ -194,5 +190,4 @@ def windowsBuild(String branch = 'master', String platform = 'native', Boolean c
             ]
         )
     }
-    */
 }
