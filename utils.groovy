@@ -75,21 +75,20 @@ def linuxBuild(String branch = 'master', String platform = 'native', Boolean cle
             --platform ${platform}\
             --update false\
             --branch ${branch}\
+            --branding r7\
             --clean ${clean.toString()}\
             --qt-dir \$QT_PATH &&\
         ./make.py"
-    /*
     sh "cd desktop-apps/win-linux/package/linux &&\
          make clean &&\
          make deploy"
-    */
     sh "cd document-builder-package &&\
         make clean &&\
-        make deploy -e SRC='../build_tools/out/linux_64/onlyoffice/documentbuilder/*'"
+        make deploy"
     /*
     sh "cd core && \
         make deploy"
-
+    */
     publishHTML([
             allowMissing: false,
             alwaysLinkToLastBuild: false,
@@ -101,7 +100,7 @@ def linuxBuild(String branch = 'master', String platform = 'native', Boolean cle
             reportTitles: ''
         ]
     )
-    */
+
     publishHTML([
             allowMissing: false,
             alwaysLinkToLastBuild: false,
@@ -113,8 +112,7 @@ def linuxBuild(String branch = 'master', String platform = 'native', Boolean cle
             reportTitles: ''
         ]
     )
-
-	/*
+    /*
     checkoutRepo('doc-builder-testing')
     sh "docker rmi doc-builder-testing || true"
     sh "cd doc-builder-testing &&\
@@ -134,11 +132,12 @@ def windowsBuild(String branch = 'master', String platform = 'native', Boolean c
             --platform ${platform}\
             --update false\
             --branch ${branch}\
+            --branding r7\
             --clean ${clean.toString()}\
             --qt-dir \"C:\\Qt\\Qt5.9.8\\5.9.8\"\
             --qt-dir-xp \"C:\\Qt\\Qt5.6.3\\5.6.3\" &&\
             call python make.py"
-    /*
+
     bat "cd desktop-apps-ext &&\
             mingw32-make clean-package &&\
             mingw32-make deploy"
@@ -154,12 +153,13 @@ def windowsBuild(String branch = 'master', String platform = 'native', Boolean c
             reportTitles: ''
         ]
     )
-    */
+
     if ( !platform.endsWith('_xp') ) {
         bat "cd document-builder-package &&\
             mingw32-make clean &&\
-            mingw32-make deploy -e SRC='../build_tools/out/linux_64/onlyoffice/documentbuilder/*'"
+            mingw32-make deploy"
 
+        /*
         String winSdkVersion = '10.0.14393.0'
         String platformType
         
@@ -174,7 +174,6 @@ def windowsBuild(String branch = 'master', String platform = 'native', Boolean c
                 platformType = ''
         }
 
-        /*
         bat "cd core && \
             call \"C:\\Program Files (x86)\\Microsoft Visual Studio 14.0\\VC\\vcvarsall.bat\" ${platformType} ${winSdkVersion} && \
             mingw32-make deploy"
@@ -192,4 +191,5 @@ def windowsBuild(String branch = 'master', String platform = 'native', Boolean c
             ]
         )
     }
+
 }
