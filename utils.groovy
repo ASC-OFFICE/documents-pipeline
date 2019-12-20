@@ -191,5 +191,4 @@ def windowsBuild(String branch = 'master', String platform = 'native', Boolean c
             ]
         )
     }
-
 }
