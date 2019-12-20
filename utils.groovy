@@ -1,8 +1,8 @@
-def checkoutRepo(String repo, String branch = 'develop', String company = 'ONLYOFFICE') {
+def checkoutRepo(String repo, String branch = 'master', String company = 'ONLYOFFICE') {
     checkout([
             $class: 'GitSCM',
             branches: [[
-                    name: "develop"
+                    name: branch
                 ]
             ],
             doGenerateSubmoduleConfigurations: false,
@@ -40,7 +40,7 @@ def getReposList()
     return repos
 }
 
-def checkoutRepos(String branch = 'develop')
+def checkoutRepos(String branch = 'master')
 {    
     for (repo in getReposList()) {
         if( repo != 'r7' ) {
@@ -66,7 +66,7 @@ def tagRepos(String tag)
 
     return this
 }
-def linuxBuild(String branch = 'develop', String platform = 'native', Boolean clean = true)
+def linuxBuild(String branch = 'master', String platform = 'native', Boolean clean = true)
 {
     checkoutRepos(branch)
     sh "cd build_tools && \
@@ -74,20 +74,22 @@ def linuxBuild(String branch = 'develop', String platform = 'native', Boolean cl
             --module \"desktop builder core\"\
             --platform ${platform}\
             --update false\
-            --branch develop\
+            --branch ${branch}\
             --clean ${clean.toString()}\
             --qt-dir \$QT_PATH &&\
         ./make.py"
+    /*
     sh "cd desktop-apps/win-linux/package/linux &&\
          make clean &&\
          make deploy"
+    */
     sh "cd document-builder-package &&\
         make clean &&\
-        make deb rpm index.html -e SRC='../build_tools/out/linux_64/onlyoffice/documentbuilder/*'"
+        make deploy -e SRC='../build_tools/out/linux_64/onlyoffice/documentbuilder/*'"
     /*
     sh "cd core && \
         make deploy"
-    */
+
     publishHTML([
             allowMissing: false,
             alwaysLinkToLastBuild: false,
@@ -99,7 +101,7 @@ def linuxBuild(String branch = 'develop', String platform = 'native', Boolean cl
             reportTitles: ''
         ]
     )
-
+    */
     publishHTML([
             allowMissing: false,
             alwaysLinkToLastBuild: false,
@@ -132,12 +134,11 @@ def windowsBuild(String branch = 'master', String platform = 'native', Boolean c
             --platform ${platform}\
             --update false\
             --branch ${branch}\
-            --branding r7\
             --clean ${clean.toString()}\
             --qt-dir \"C:\\Qt\\Qt5.9.8\\5.9.8\"\
             --qt-dir-xp \"C:\\Qt\\Qt5.6.3\\5.6.3\" &&\
             call python make.py"
-
+    /*
     bat "cd desktop-apps-ext &&\
             mingw32-make clean-package &&\
             mingw32-make deploy"
@@ -153,6 +154,7 @@ def windowsBuild(String branch = 'master', String platform = 'native', Boolean c
             reportTitles: ''
         ]
     )
+    */
     if ( !platform.endsWith('_xp') ) {
         bat "cd document-builder-package &&\
             mingw32-make clean &&\
