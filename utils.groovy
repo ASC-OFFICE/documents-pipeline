@@ -195,9 +195,7 @@ def windowsBuildDesktop (String platform)
 {
     bat "cd desktop-apps &&\
             mingw32-make clean-package &&\
-            mingw32-make deploy \
-                -e BRANDING_DIR=../r7/desktop-apps \
-                -e ENABLE_SIGNING=1"
+            mingw32-make deploy -e BRANDING_DIR=../r7/desktop-apps"
 
     publishHTML([
             allowMissing: false,
