@@ -57,7 +57,7 @@ pipeline {
       name: 'documentserver'
     )
     booleanParam (
-      defaultValue: false,
+      defaultValue: true,
       description: 'Build and publish DocumentServer-EE packages',
       name: 'documentserver_ee'
     )
