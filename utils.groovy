@@ -54,13 +54,12 @@ def getReposList()
     repos.add(getRepoMap('plugin-wordpress',     'sdkjs-plugins/plugin-wordpress'))
     repos.add(getRepoMap('plugin-zotero',        'sdkjs-plugins/plugin-zotero'))
     repos.add(getRepoMap('plugin-mendeley',      'sdkjs-plugins/plugin-mendeley'))
-    repos.add(getRepoMap('plugin-glavred',       'sdkjs-plugins/plugin-glavred'))
     repos.add(getRepoMap('r7', 'r7', 'ASC-OFFICE'))
     repos.add(getRepoMap('sdkjs'))
     repos.add(getRepoMap('sdkjs-comparison'))
     repos.add(getRepoMap('sdkjs-content-controls'))
     repos.add(getRepoMap('sdkjs-disable-features'))
-    repos.add(getRepoMap('sdkjs-pivot-tables'))
+    repos.add(getRepoMap('sdkjs-sheet-views'))
     repos.add(getRepoMap('server'))
     repos.add(getRepoMap('server-license'))
     repos.add(getRepoMap('server-lockstorage'))
@@ -98,7 +97,7 @@ def printBranches(String branch, Map repo)
     return sh (
         label: "${repo.owner}/${repo.name}: branches",
         script: """
-            gh api -X GET repos/${repo.owner}/${repo.name}/branches | \
+            gh api -X GET repos/${repo.owner}/${repo.name}/branches?per_page=100 | \
             jq -c '.[] | { name, protected }'
         """,
         returnStatus: true
@@ -163,38 +162,34 @@ def createBranch(String branch, String baseBranch, Map repo)
     )
 }
 
-def mergeBranch(String branch, String extraBranch, Map repo)
+def mergeBranch(String branch, ArrayList baseBranches, Map repo)
 {
     return sh (
-        label: "${repo.owner}/${repo.name}: finish ${branch}",
+        label: "${repo.owner}/${repo.name}: merge ${branch} to ${baseBranches.join(', ')}",
         script: """#!/bin/bash -xe
             if [ \$(git branch -a | grep '${branch}' | wc -c) -eq 0 ]; then
                 exit 0
             fi
-            baseBranches=('master' 'develop')
+            base_branches=(${baseBranches.join(' ')})
             merge=0
-            if [ \$(echo -n '${extraBranch}' | wc -c) -ne 0 ] \
-            && [ \$(git branch -a | grep '${extraBranch}' | wc -c) -ne 0 ]; then
-                baseBranches+=('${extraBranch}')
-            fi
-            for baseBranch in \${baseBranches[*]}; do
+            for base in \${base_branches[*]}; do
                 git checkout -f ${branch}
                 git pull --ff-only origin ${branch}
                 gh pr create \
-                    --base \$baseBranch \
-                    --title \"Merge branch ${branch} into \$baseBranch\" \
+                    --base \$base \
+                    --title \"Merge branch ${branch} into \$base\" \
                     --body \"\" || \
                 true
-                git checkout \$baseBranch
-                git pull --ff-only origin \$baseBranch
+                git checkout \$base
+                git pull --ff-only origin \$base
                 git merge ${branch} \
                     --no-edit --no-ff \
-                    -m \"Merge branch ${branch} into \$baseBranch\" || \
+                    -m \"Merge branch ${branch} into \$base\" || \
                 continue
-                git push origin \$baseBranch
+                git push origin \$base
                 ((++merge))
             done
-            if [ \$merge -ne \${#baseBranches[@]} ]; then
+            if [ \$merge -ne \${#base_branches[@]} ]; then
                 exit 2
             fi
         """,
@@ -284,13 +279,32 @@ def startRelease(String branch, String baseBranch, Boolean protect)
     return this
 }
 
-def finishRelease(String branch, String extraBranch)
+def mergeRelease(String branch)
 {
     def success = 0
     def total = getReposList().size()
+    def baseBranches = ['master']
     for (repo in getReposList()) {
         dir (repo.dir) {
-            def retM = mergeBranch(branch, extraBranch, repo)
+            def retM = mergeBranch(branch, baseBranches, repo)
+            if (retM == 0) { success++ }
+        }
+    }
+    setBuildStatus(success, total)
+    return this
+}
+
+def finishRelease(String branch, String extraBranch = '')
+{
+    def success = 0
+    def total = getReposList().size()
+    def baseBranches = ['master', 'develop']
+    if (!extraBranch.isEmpty()) {
+        baseBranches.add(extraBranch)
+    }
+    for (repo in getReposList()) {
+        dir (repo.dir) {
+            def retM = mergeBranch(branch, baseBranches, repo)
             if (retM == 0) {
                 def retU = unprotectBranch(branch, repo)
                 def retD = deleteBranch(branch, repo)
@@ -329,37 +343,22 @@ def getConfParams(String platform, Boolean clean, String license)
     }
     if (platform.startsWith("win")) {
         modules.add('tests')
-        modules.add('updmodule')
     }
 
     def confParams = []
     confParams.add("--module \"${modules.join(' ')}\"")
     confParams.add("--platform ${platform}")
     confParams.add("--update false")
-    confParams.add("--branding r7")
-    confParams.add("--branding-name R7-Office")
     confParams.add("--clean ${clean.toString()}")
     confParams.add("--qt-dir ${env.QT_PATH}")
     if (platform.endsWith("_xp")) {
         confParams.add("--qt-dir-xp ${env.QT56_PATH}")
     }
-    if (license == "commercial" || license == "freemium") {
-        confParams.add("--sdkjs-addon comparison")
-        confParams.add("--sdkjs-addon content-controls")
-        confParams.add("--sdkjs-addon pivot-tables")
-        confParams.add("--server-addon license")
-        confParams.add("--server-addon lockstorage")
-        confParams.add("--web-apps-addon mobile")
-    }
-    if (license == "freemium") {
-        confParams.add("--sdkjs-addon-desktop disable-features")
-    }
-    if (params.extra_params) {
-        confParams.add(params.extra_params)
-    }
-
     confParams.add("--branding r7")
     confParams.add("--branding-name r7-office")
+    if (!params.extra_params.isEmpty()) {
+        confParams.add(params.extra_params)
+    }
 
     return confParams.join(' ')
 }
