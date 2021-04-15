@@ -361,7 +361,7 @@ def getConfParams(String platform, Boolean clean, String license)
     confParams.add("--branding r7")
     confParams.add("--branding-name r7-office")
     if (params.password_protection) {
-        confParams.add("--features enable_protection disable_signatures")
+        confParams.add("--features \"enable_protection disable_signatures\"")
     }
     if (!params.extra_params.isEmpty()) {
         confParams.add(params.extra_params)
