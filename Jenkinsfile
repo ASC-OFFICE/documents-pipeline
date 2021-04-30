@@ -1,5 +1,8 @@
 pipeline {
   agent none
+  options {
+    buildDiscarder logRotator(daysToKeepStr: '90')
+  }
   parameters {
     booleanParam (
       defaultValue: false,
