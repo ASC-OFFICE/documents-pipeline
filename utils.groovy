@@ -23,7 +23,7 @@ listRepos = [
   [name: 'document-builder-package'],
   [name: 'document-server-integration'],
   [name: 'document-server-package'],
-  [name: 'document-templates'],
+  // [name: 'document-templates'],
   [name: 'documents-pipeline'],
   // [name: 'onlyoffice'],
   [name: 'plugin-autocomplete',  dir: 'sdkjs-plugins/plugin-autocomplete'],
