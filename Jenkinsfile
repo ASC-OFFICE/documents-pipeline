@@ -1,7 +1,8 @@
 defaults = [
   clean:         true,
   linux:         true,
-  macos:         false,
+  macos_64:      false,
+  macos_86:      false,
   windows_64:    true,
   windows_32:    true,
   windows_64_xp: true,
@@ -17,7 +18,8 @@ defaults = [
   password:      true,
   beta:          false,
   test:          false,
-  sign:          true
+  sign:          true,
+  schedule:      'H 17 * * *'
 ]
 
 if ('develop' == BRANCH_NAME) {
@@ -27,6 +29,10 @@ if ('develop' == BRANCH_NAME) {
   ])
 }
 
+if (BRANCH_NAME.startsWith('hotfix') || BRANCH_NAME.startsWith('release')) {
+  defaults.schedule = 'H 23 * * *'
+}
+
 node('master') {
   checkout scm
   utils = load 'utils.groovy'
@@ -34,6 +40,14 @@ node('master') {
 
 pipeline {
   agent none
+  environment {
+    COMPANY_NAME = "R7-Office"
+    PUBLISHER_NAME = "AO \"NOVYE KOMMUNIKACIONNYE TEHNOLOGII\""
+    PUBLISHER_URL = "http://r7-office.ru"
+    SUPPORT_URL = "http://support.r7-office.ru"
+    SUPPORT_MAIL = "support@r7-office.ru"
+    TELEGRAM_TOKEN = credentials('telegram-bot-token')
+  }
   options {
     buildDiscarder logRotator(daysToKeepStr: '90', artifactDaysToKeepStr: '30')
   }
@@ -54,9 +68,14 @@ pipeline {
       defaultValue: defaults.linux
     )
     booleanParam (
-      name:         'macos',
+      name:         'macos_64',
       description:  'Build macOS targets',
-      defaultValue: defaults.macos
+      defaultValue: defaults.macos_64
+    )
+    booleanParam (
+      name:         'macos_86',
+      description:  'Build macOS x86 targets',
+      defaultValue: defaults.macos_86
     )
     booleanParam (
       name:         'win_64',
@@ -145,7 +164,7 @@ pipeline {
     )
   }
   triggers {
-    cron('H 17 * * *')
+    cron(defaults.schedule)
   }
   stages {
     stage('Prepare') {
@@ -173,13 +192,13 @@ pipeline {
           deployServerEeList = []
           deployServerDeList = []
           deployAndroidList = []
-
-          env.COMPANY_NAME = "R7-Office"
-          env.PUBLISHER_NAME = "AO \"NOVYE KOMMUNIKACIONNYE TEHNOLOGII\""
-          env.PUBLISHER_URL = "http://r7-office.ru"
-          env.SUPPORT_URL = "http://support.r7-office.ru"
-          env.SUPPORT_MAIL = "support@r7-office.ru"
+          stageStats = [:]
         }
+      }
+      post {
+        fixed   { script { setStageStats('fixed')   } }
+        failure { script { setStageStats('failure') } }
+        success { script { setStageStats('success') } }
       }
     }
     stage('Build') {
@@ -207,7 +226,7 @@ pipeline {
                   ) {
                 utils.linuxBuild(platform)
                 if (params.core)
-                  utils.linuxBuildCore()
+                  utils.deployCore(platform)
                 if (params.documentbuilder)
                   utils.linuxBuildBuilder(platform)
                 if (params.documentserver)
@@ -236,11 +255,23 @@ pipeline {
               if (params.test) utils.linuxTest()
             }
           }
+          post {
+            fixed   { script { setStageStats('fixed')   } }
+            failure { script { setStageStats('failure') } }
+            success { script { setStageStats('success') } }
+          }
         }
         stage('macOS build') {
-          agent { label 'macos' }
+          agent { label 'macos_64' }
+          environment {
+            FASTLANE_DISABLE_COLORS = '1'
+            APPLE_ID = credentials('macos-apple-id')
+            TEAM_ID = credentials('macos-team-id')
+            FASTLANE_APPLE_APPLICATION_SPECIFIC_PASSWORD = credentials('macos-apple-password')
+            CODESIGNING_IDENTITY = 'Developer ID Application'
+          }
           when {
-            expression { params.macos }
+            expression { params.macos_64 }
             beforeAgent true
           }
           steps {
@@ -256,14 +287,57 @@ pipeline {
 
               if (params.core) {
                 utils.macosBuild(platform)
-                utils.macosBuildCore()
+                utils.deployCore(platform)
               }
 
-              // if (params.desktopeditor) {
-              //   utils.macosBuild(platform, "freemium")
-              //   utils.macosBuildDesktop(platform)
-              // }
+              if (params.desktopeditor) {
+                utils.macosBuild(platform, "commercial")
+                utils.macosBuildDesktop()
+              }
             }
+          }
+          post {
+            fixed   { script { setStageStats('fixed')   } }
+            failure { script { setStageStats('failure') } }
+            success { script { setStageStats('success') } }
+          }
+        }
+        stage('macOS x86 build') {
+          agent { label 'macos_86' }
+          environment {
+            FASTLANE_DISABLE_COLORS = '1'
+            FASTLANE_SKIP_UPDATE_CHECK = '1'
+            APPLE_ID = credentials('macos-apple-id')
+            TEAM_ID = credentials('macos-team-id')
+            FASTLANE_APPLE_APPLICATION_SPECIFIC_PASSWORD = credentials('macos-apple-password')
+            CODESIGNING_IDENTITY = 'Developer ID Application'
+            _X86 = '1'
+          }
+          when {
+            expression { params.macos_86 }
+            beforeAgent true
+          }
+          steps {
+            script {
+              if (params.wipe)
+                deleteDir()
+              else if (params.clean && params.desktopeditor)
+                dir ('desktop-apps') { deleteDir() }
+
+              utils.checkoutRepos(env.BRANCH_NAME)
+
+              String platform = "mac_64"
+
+              if (params.desktopeditor) {
+                utils.macosBuild(platform, "commercial")
+                utils.macosBuildDesktop()
+              }
+            }
+          }
+          post {
+            fixed   { script { setStageStats('fixed')   } }
+            failure { script { setStageStats('failure') } }
+            success { script { setStageStats('success') } }
           }
         }
         stage('Windows 64-bit build') {
@@ -294,7 +368,7 @@ pipeline {
                   ) {
                 utils.windowsBuild(platform)
                 if (params.core)
-                  utils.windowsBuildCore(platform)
+                  utils.deployCore(platform)
                 if (params.documentbuilder)
                   utils.windowsBuildBuilder(platform)
                 if (params.documentserver)
@@ -319,6 +393,11 @@ pipeline {
                   utils.windowsBuildServer(platform, "DocumentServer-DE")
               }
             }
+          }
+          post {
+            fixed   { script { setStageStats('fixed')   } }
+            failure { script { setStageStats('failure') } }
+            success { script { setStageStats('success') } }
           }
         }
         stage('Windows 32-bit build') {
@@ -346,7 +425,7 @@ pipeline {
               if (params.core || params.documentbuilder) {
                 utils.windowsBuild(platform)
                 if (params.core)
-                  utils.windowsBuildCore(platform)
+                  utils.deployCore(platform)
                 if (params.documentbuilder)
                   utils.windowsBuildBuilder(platform)
               }
@@ -356,6 +435,11 @@ pipeline {
                 utils.windowsBuildDesktop(platform)
               }
             }
+          }
+          post {
+            fixed   { script { setStageStats('fixed')   } }
+            failure { script { setStageStats('failure') } }
+            success { script { setStageStats('success') } }
           }
         }
         stage('Windows XP 64-bit build') {
@@ -388,6 +472,11 @@ pipeline {
               }
             }
           }
+          post {
+            fixed   { script { setStageStats('fixed')   } }
+            failure { script { setStageStats('failure') } }
+            success { script { setStageStats('success') } }
+          }
         }
         stage('Windows XP 32-bit build') {
           agent {
@@ -419,9 +508,14 @@ pipeline {
               }
             }
           }
+          post {
+            fixed   { script { setStageStats('fixed')   } }
+            failure { script { setStageStats('failure') } }
+            success { script { setStageStats('success') } }
+          }
         }
         stage('Android build') {
-          agent { label 'linux_64_new' }
+          agent { label 'linux_64' }
           when {
             expression { params.android && params.core }
             beforeAgent true
@@ -432,6 +526,11 @@ pipeline {
 
               utils.androidBuild(env.BRANCH_NAME)
             }
+          }
+          post {
+            fixed   { script { setStageStats('fixed')   } }
+            failure { script { setStageStats('failure') } }
+            success { script { setStageStats('success') } }
           }
         }
       }
@@ -450,6 +549,7 @@ pipeline {
             || params.documentbuilder
             || params.documentserver
             || params.documentserver_ee
+            || params.documentserver_ie
             || params.documentserver_de)) {
           build (
             job: 'r7-office-repo-manager',
@@ -460,6 +560,16 @@ pipeline {
             wait: false
           )
         }
+      }
+    }
+    fixed {
+      node('master') {
+        script { sendTelegramMessage(getJobStats('fixed'), '-342815292') }
+      }
+    }
+    failure {
+      node('master') {
+        script { sendTelegramMessage(getJobStats('failure'), '-342815292') }
       }
     }
   }
