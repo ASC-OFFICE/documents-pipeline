@@ -190,11 +190,6 @@ def linuxBuildServer(String platform = 'native', String productName='documentser
   }
 }
 
-def linuxBuildCore() {
-  sh "cd core && \
-    make deploy"
-}
-
 def linuxTest() {
   checkoutRepo([owner: 'ONLYOFFICE', name: 'doc-builder-testing',
     dir: 'doc-builder-testing'], 'master')
@@ -315,26 +310,6 @@ def windowsBuildServer(String platform = 'native', String productName='DocumentS
         break
     }
   }
-}
-
-def windowsBuildCore(String platform) {
-  String winSdkVersion = '10.0.14393.0'
-  String platformType
-  
-  switch (platform) {
-    case 'win_64':
-      platformType = 'x64'
-      break
-    case 'win_32':
-      platformType = 'x86'
-      break
-    default:
-      platformType = ''
-  }
-
-  bat "cd core && \
-    call \"C:\\Program Files (x86)\\Microsoft Visual Studio 14.0\\VC\\vcvarsall.bat\" ${platformType} ${winSdkVersion} && \
-    make deploy"
 }
 
 def androidBuild(String branch = 'master', String config = 'release') {

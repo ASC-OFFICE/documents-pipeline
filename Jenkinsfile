@@ -41,6 +41,11 @@ node('master') {
 pipeline {
   agent none
   environment {
+    COMPANY_NAME = "R7-Office"
+    PUBLISHER_NAME = "AO \"NOVYE KOMMUNIKACIONNYE TEHNOLOGII\""
+    PUBLISHER_URL = "http://r7-office.ru"
+    SUPPORT_URL = "http://support.r7-office.ru"
+    SUPPORT_MAIL = "support@r7-office.ru"
     TELEGRAM_TOKEN = credentials('telegram-bot-token')
   }
   options {
@@ -188,12 +193,6 @@ pipeline {
           deployServerDeList = []
           deployAndroidList = []
           stageStats = [:]
-
-          env.COMPANY_NAME = "R7-Office"
-          env.PUBLISHER_NAME = "AO \"NOVYE KOMMUNIKACIONNYE TEHNOLOGII\""
-          env.PUBLISHER_URL = "http://r7-office.ru"
-          env.SUPPORT_URL = "http://support.r7-office.ru"
-          env.SUPPORT_MAIL = "support@r7-office.ru"
         }
       }
       post {
@@ -550,6 +549,7 @@ pipeline {
             || params.documentbuilder
             || params.documentserver
             || params.documentserver_ee
+            || params.documentserver_ie
             || params.documentserver_de)) {
           build (
             job: 'r7-office-repo-manager',
