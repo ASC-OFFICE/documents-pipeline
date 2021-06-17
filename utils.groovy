@@ -67,8 +67,7 @@ def checkoutRepos(String branch = 'master') {
   }
 }
 
-def tagRepos(String tag)
-{
+def tagRepos(String tag) {
   for (repo in listRepos) {
     sh "cd ${repo.dir} && \
       git tag -l | xargs git tag -d && \
@@ -78,17 +77,16 @@ def tagRepos(String tag)
   }
 }
 
-def getConfParams(String platform, String license)
-{
+def getConfParams(String platform, String license) {
   def modules = []
   if (params.core && license == "opensource") {
     modules.add('core')
   }
+  // Add module to build to enforce clean it on build
+  if (params.desktopeditor && license == "commercial") {
+    modules.add('desktop')
+  }
   if (platform != "mac_64") {
-    // Add module to build to enforce clean it on build
-    if (params.desktopeditor && license == "commercial") {
-      modules.add('desktop')
-    }
     if (params.documentbuilder && license == "opensource") {
       modules.add('builder')
     }
@@ -113,6 +111,10 @@ def getConfParams(String platform, String license)
   }
   confParams.add("--branding r7")
   confParams.add("--branding-name r7-office")
+  if (platform == "mac_64") {
+    confParams.add("--compiler \"clang\"")
+    if (env._X86 == "1") confParams.add("--config \"use_v8\"")
+  }
   if (params.password_protection) {
     confParams.add("--features \"enable_protection disable_signatures\"")
   }
@@ -191,8 +193,6 @@ def linuxBuildServer(String platform = 'native', String productName='documentser
 def linuxBuildCore() {
   sh "cd core && \
     make deploy"
-
-  return this
 }
 
 def linuxTest() {
@@ -211,19 +211,54 @@ def macosBuild(String platform = 'native', String license = 'opensource') {
 }
 
 def macosBuildDesktop(String platform = 'native') {
-  sh "cd desktop-apps && \
-    make clean && \
-    make deploy"
+  sh "cd build_tools && ./make_packages.py"
 
-  def deployData = readJSON file: "desktop-apps/deploy.json"
-  for(item in deployData.items) {
-    println item
-    deployDesktopList.add(item)
+  sh """#!/bin/bash -xe
+    cd desktop-apps/macos/build
+
+    PACKAGE_NAME="ONLYOFFICE\${_X86:+"-x86"}"
+    DEPLOY_TITLE="macOS\${_X86:+" x86"}"
+
+    S3_SECTION_DIR="onlyoffice/\$RELEASE_BRANCH/macos"
+    S3_UPDATES_DIR="\$S3_SECTION_DIR/update/editors\${_X86:+"_x86"}/\$PRODUCT_VERSION.\$BUILD_NUMBER"
+    APP_VERSION=\$(mdls -name kMDItemVersion -raw ONLYOFFICE.app)
+    DMG="\$PACKAGE_NAME-\$PRODUCT_VERSION-\$BUILD_NUMBER.dmg"
+    ZIP="\$PACKAGE_NAME-\$APP_VERSION.zip"
+    APPCAST="onlyoffice.xml"
+    CHANGES_EN="\$PACKAGE_NAME-\$APP_VERSION.html"
+    CHANGES_RU="\$PACKAGE_NAME-\$APP_VERSION.ru.html"
+
+    aws s3 cp --no-progress --acl public-read \
+      ONLYOFFICE.dmg s3://\$S3_BUCKET/\$S3_SECTION_DIR/\$DMG
+
+    aws s3 sync --no-progress --acl public-read \
+      update s3://\$S3_BUCKET/\$S3_UPDATES_DIR
+
+    echo -e "platform,title,path" > deploy.csv
+    echo -e "macos,\$DEPLOY_TITLE DMG,\$S3_SECTION_DIR/\$DMG" >> deploy.csv
+    echo -e "macos,\$DEPLOY_TITLE ZIP,\$S3_UPDATES_DIR/\$ZIP" >> deploy.csv
+    for i in update/*.delta; do
+      DELTA=\$(basename \$i)
+      echo -e "macos,\$DEPLOY_TITLE \$DELTA,\$S3_UPDATES_DIR/\$DELTA" >> deploy.csv
+    done
+    echo -e "macos,\$DEPLOY_TITLE Appcast,\$S3_UPDATES_DIR/\$APPCAST" >> deploy.csv
+    if [[ -f update/\$CHANGES_EN ]]; then
+      echo -e "macos,\$DEPLOY_TITLE Release Notes EN,\$S3_UPDATES_DIR/\$CHANGES_EN" >> deploy.csv
+    fi
+    if [[ -f update/\$CHANGES_RU ]]; then
+      echo -e "macos,\$DEPLOY_TITLE Release Notes RU,\$S3_UPDATES_DIR/\$CHANGES_RU" >> deploy.csv
+    fi
+  """
+
+  def deployData = readCSV file: "desktop-apps/macos/build/deploy.csv", format: CSVFormat.DEFAULT.withHeader()
+  for(item in deployData) {
+    def temp = [ 
+      platform: item.get('platform'),
+      title: item.get('title'),
+      path: item.get('path') ]
+    println temp
+    deployDesktopList.add(temp)
   }
-}
-
-def macosBuildCore() {
-  sh "cd core && make deploy"
 }
 
 def windowsBuild(String platform = 'native', String license = 'opensource') {
@@ -345,6 +380,51 @@ def androidBuild(String branch = 'master', String config = 'release') {
   deployAndroidList.add(deployData)
 }
 
+def deployCore(String platform) {
+  String dirRepo, platformType, version
+
+  switch(platform) {
+    case 'linux_64':
+      dirRepo = 'linux'
+      platformType = 'x64'
+      version = PRODUCT_VERSION + '-' + BUILD_NUMBER
+      break
+    case 'mac_64':
+      dirRepo = 'mac'
+      platformType = 'x64'
+      version = PRODUCT_VERSION + '-' + BUILD_NUMBER
+      break
+    case 'win_64':
+      dirRepo = 'windows'
+      platformType = 'x64'
+      version = PRODUCT_VERSION + '.' + BUILD_NUMBER
+      break
+    case 'win_32':
+      dirRepo = 'windows'
+      platformType = 'x86'
+      version = PRODUCT_VERSION + '.' + BUILD_NUMBER
+      break
+  }
+
+  String pathCore = "build_tools/out/${platform}/onlyoffice/core/core.7z"
+  String dirS3CoreV = "${dirRepo}/core/${BRANCH_NAME}/${version}/${platformType}"
+  String dirS3CoreL = "${dirRepo}/core/${BRANCH_NAME}/latest/${platformType}"
+  String label = 'Deploy Core to S3'
+  String script = """
+    aws s3 cp --acl public-read --no-progress \
+      ${pathCore} \
+      s3://${S3_BUCKET}/${dirS3CoreV}/
+    aws s3 sync --acl public-read --delete --no-progress \
+      s3://${S3_BUCKET}/${dirS3CoreV}/ \
+      s3://${S3_BUCKET}/${dirS3CoreL}/
+  """
+
+  switch(platform) {
+    case ['linux_64', 'mac_64']: sh  label: label, script: script; break
+    case ['win_64', 'win_32']:   bat label: label, script: script; break
+  }
+}
+
 def createReports() {
   Boolean desktop = !deployDesktopList.isEmpty()
   Boolean builder = !deployBuilderList.isEmpty()
@@ -453,4 +533,33 @@ def genHtml(ArrayList deployList) {
     |""".stripMargin()
 
   return html
+}
+
+def setStageStats(String stageStatus) {
+  if (stageStats."${STAGE_NAME}" == null) {
+    stageStats."${STAGE_NAME}" = stageStatus
+  }
+}
+
+def getJobStats(String jobStatus) {
+  String text = "Build [${currentBuild.fullDisplayName}]" \
+    + "(${currentBuild.absoluteUrl}) ${jobStatus}"
+  String icon
+  stageStats.each { stage, status ->
+    switch(status) {
+      case 'fixed':   icon = '🟢'; break
+      case 'failure': icon = '🔴'; break
+      case 'success': icon = '🔵'; break
+    }
+    text += "\n${icon} ${stage}"
+  }
+  return text
+}
+
+def sendTelegramMessage(String text, String chatId, Boolean markdown = true) {
+  sh label: "Send Telegram Message", script: "curl -X POST -s -S \
+    ${markdown ? '-d parse_mode=markdown' : ''} \
+    -d chat_id=${chatId} \
+    --data-urlencode text='${text}' \
+    https://api.telegram.org/bot\$TELEGRAM_TOKEN/sendMessage"
 }
