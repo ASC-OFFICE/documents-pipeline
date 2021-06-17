@@ -196,9 +196,9 @@ pipeline {
         }
       }
       post {
-        fixed   { script { setStageStats('fixed')   } }
-        failure { script { setStageStats('failure') } }
-        success { script { setStageStats('success') } }
+        fixed   { script { utils.setStageStats('fixed')   } }
+        failure { script { utils.setStageStats('failure') } }
+        success { script { utils.setStageStats('success') } }
       }
     }
     stage('Build') {
@@ -256,9 +256,9 @@ pipeline {
             }
           }
           post {
-            fixed   { script { setStageStats('fixed')   } }
-            failure { script { setStageStats('failure') } }
-            success { script { setStageStats('success') } }
+            fixed   { script { utils.setStageStats('fixed')   } }
+            failure { script { utils.setStageStats('failure') } }
+            success { script { utils.setStageStats('success') } }
           }
         }
         stage('macOS build') {
@@ -297,9 +297,9 @@ pipeline {
             }
           }
           post {
-            fixed   { script { setStageStats('fixed')   } }
-            failure { script { setStageStats('failure') } }
-            success { script { setStageStats('success') } }
+            fixed   { script { utils.setStageStats('fixed')   } }
+            failure { script { utils.setStageStats('failure') } }
+            success { script { utils.setStageStats('success') } }
           }
         }
         stage('macOS x86 build') {
@@ -335,9 +335,9 @@ pipeline {
             }
           }
           post {
-            fixed   { script { setStageStats('fixed')   } }
-            failure { script { setStageStats('failure') } }
-            success { script { setStageStats('success') } }
+            fixed   { script { utils.setStageStats('fixed')   } }
+            failure { script { utils.setStageStats('failure') } }
+            success { script { utils.setStageStats('success') } }
           }
         }
         stage('Windows 64-bit build') {
@@ -395,9 +395,9 @@ pipeline {
             }
           }
           post {
-            fixed   { script { setStageStats('fixed')   } }
-            failure { script { setStageStats('failure') } }
-            success { script { setStageStats('success') } }
+            fixed   { script { utils.setStageStats('fixed')   } }
+            failure { script { utils.setStageStats('failure') } }
+            success { script { utils.setStageStats('success') } }
           }
         }
         stage('Windows 32-bit build') {
@@ -437,9 +437,9 @@ pipeline {
             }
           }
           post {
-            fixed   { script { setStageStats('fixed')   } }
-            failure { script { setStageStats('failure') } }
-            success { script { setStageStats('success') } }
+            fixed   { script { utils.setStageStats('fixed')   } }
+            failure { script { utils.setStageStats('failure') } }
+            success { script { utils.setStageStats('success') } }
           }
         }
         stage('Windows XP 64-bit build') {
@@ -473,9 +473,9 @@ pipeline {
             }
           }
           post {
-            fixed   { script { setStageStats('fixed')   } }
-            failure { script { setStageStats('failure') } }
-            success { script { setStageStats('success') } }
+            fixed   { script { utils.setStageStats('fixed')   } }
+            failure { script { utils.setStageStats('failure') } }
+            success { script { utils.setStageStats('success') } }
           }
         }
         stage('Windows XP 32-bit build') {
@@ -509,9 +509,9 @@ pipeline {
             }
           }
           post {
-            fixed   { script { setStageStats('fixed')   } }
-            failure { script { setStageStats('failure') } }
-            success { script { setStageStats('success') } }
+            fixed   { script { utils.setStageStats('fixed')   } }
+            failure { script { utils.setStageStats('failure') } }
+            success { script { utils.setStageStats('success') } }
           }
         }
         stage('Android build') {
@@ -528,9 +528,9 @@ pipeline {
             }
           }
           post {
-            fixed   { script { setStageStats('fixed')   } }
-            failure { script { setStageStats('failure') } }
-            success { script { setStageStats('success') } }
+            fixed   { script { utils.setStageStats('fixed')   } }
+            failure { script { utils.setStageStats('failure') } }
+            success { script { utils.setStageStats('success') } }
           }
         }
       }
@@ -564,12 +564,16 @@ pipeline {
     }
     fixed {
       node('master') {
-        script { sendTelegramMessage(getJobStats('fixed'), '-342815292') }
+        script {
+          utils.sendTelegramMessage(utils.getJobStats('fixed'), '-342815292')
+        }
       }
     }
     failure {
       node('master') {
-        script { sendTelegramMessage(getJobStats('failure'), '-342815292') }
+        script {
+          utils.sendTelegramMessage(utils.getJobStats('failure'), '-342815292')
+        }
       }
     }
   }
