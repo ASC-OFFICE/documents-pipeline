@@ -1,7 +1,7 @@
 defaults = [
   clean:         true,
   linux:         true,
-  macos_64:      false,
+  macos_64:      true,
   macos_86:      false,
   windows_64:    true,
   windows_32:    true,
@@ -24,6 +24,7 @@ defaults = [
 
 if ('develop' == BRANCH_NAME) {
   defaults.putAll([
+    macos_64:      false,
     server_ie:     false,
     beta:          true
   ])
