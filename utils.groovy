@@ -209,19 +209,18 @@ def macosBuildDesktop(String platform = 'native') {
   sh "cd build_tools && ./make_packages.py"
 
   sh """#!/bin/bash -xe
-    cd desktop-apps/macos/build
+    cd r7/desktop-apps/macos/build
 
-    PACKAGE_NAME="ONLYOFFICE\${_X86:+"-x86"}"
-    DEPLOY_TITLE="macOS\${_X86:+" x86"}"
+    PACKAGE_NAME="R7-Office"
+    DEPLOY_TITLE="macOS"
 
-    S3_SECTION_DIR="onlyoffice/\$RELEASE_BRANCH/macos"
-    S3_UPDATES_DIR="\$S3_SECTION_DIR/update/editors\${_X86:+"_x86"}/\$PRODUCT_VERSION.\$BUILD_NUMBER"
-    APP_VERSION=\$(mdls -name kMDItemVersion -raw ONLYOFFICE.app)
+    S3_SECTION_DIR="r7-office/\$RELEASE_BRANCH/macos"
+    S3_UPDATES_DIR="\$S3_SECTION_DIR/update/editors_x64/\$PRODUCT_VERSION.\$BUILD_NUMBER"
+    APP_VERSION=\$(mdls -name kMDItemVersion -raw R7-Office.app)
     DMG="\$PACKAGE_NAME-\$PRODUCT_VERSION-\$BUILD_NUMBER.dmg"
     ZIP="\$PACKAGE_NAME-\$APP_VERSION.zip"
-    APPCAST="onlyoffice.xml"
-    CHANGES_EN="\$PACKAGE_NAME-\$APP_VERSION.html"
-    CHANGES_RU="\$PACKAGE_NAME-\$APP_VERSION.ru.html"
+    APPCAST="r7-office.xml"
+    CHANGES="\$PACKAGE_NAME-\$APP_VERSION.html"
 
     aws s3 cp --no-progress --acl public-read \
       ONLYOFFICE.dmg s3://\$S3_BUCKET/\$S3_SECTION_DIR/\$DMG
@@ -237,11 +236,8 @@ def macosBuildDesktop(String platform = 'native') {
       echo -e "macos,\$DEPLOY_TITLE \$DELTA,\$S3_UPDATES_DIR/\$DELTA" >> deploy.csv
     done
     echo -e "macos,\$DEPLOY_TITLE Appcast,\$S3_UPDATES_DIR/\$APPCAST" >> deploy.csv
-    if [[ -f update/\$CHANGES_EN ]]; then
-      echo -e "macos,\$DEPLOY_TITLE Release Notes EN,\$S3_UPDATES_DIR/\$CHANGES_EN" >> deploy.csv
-    fi
-    if [[ -f update/\$CHANGES_RU ]]; then
-      echo -e "macos,\$DEPLOY_TITLE Release Notes RU,\$S3_UPDATES_DIR/\$CHANGES_RU" >> deploy.csv
+    if [[ -f update/\$CHANGES ]]; then
+      echo -e "macos,\$DEPLOY_TITLE Release Notes,\$S3_UPDATES_DIR/\$CHANGES" >> deploy.csv
     fi
   """
 
