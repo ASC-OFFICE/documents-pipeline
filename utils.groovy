@@ -241,7 +241,7 @@ def macosBuildDesktop(String platform = 'native') {
     fi
   """
 
-  def deployData = readCSV file: "desktop-apps/macos/build/deploy.csv", format: CSVFormat.DEFAULT.withHeader()
+  def deployData = readCSV file: "r7/desktop-apps/macos/build/deploy.csv", format: CSVFormat.DEFAULT.withHeader()
   for(item in deployData) {
     def temp = [ 
       platform: item.get('platform'),
