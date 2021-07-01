@@ -223,7 +223,7 @@ def macosBuildDesktop(String platform = 'native') {
     CHANGES="\$PACKAGE_NAME-\$APP_VERSION.html"
 
     aws s3 cp --no-progress --acl public-read \
-      ONLYOFFICE.dmg s3://\$S3_BUCKET/\$S3_SECTION_DIR/\$DMG
+      R7-Office.dmg s3://\$S3_BUCKET/\$S3_SECTION_DIR/\$DMG
 
     aws s3 sync --no-progress --acl public-read \
       update s3://\$S3_BUCKET/\$S3_UPDATES_DIR
