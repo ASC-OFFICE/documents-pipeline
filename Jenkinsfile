@@ -545,22 +545,15 @@ pipeline {
         }
       }
       script {
-        if (params.linux_64
-            && (params.desktopeditor
-            || params.documentbuilder
-            || params.documentserver
-            || params.documentserver_ee
-            || params.documentserver_ie
-            || params.documentserver_de)) {
+        if (params.linux_64)
           build (
-            job: 'r7-office-repo-manager',
+            job: 'repo-manager',
             parameters: [
-              string (name: 'release_branch', value: env.RELEASE_BRANCH),
-              string (name: 'COMPANY_NAME', value: env.COMPANY_NAME.toLowerCase())
+              string (name: 'company', value: env.COMPANY_NAME.toLowerCase()),
+              string (name: 'branch', value: env.RELEASE_BRANCH)
             ],
             wait: false
           )
-        }
       }
     }
     fixed {
