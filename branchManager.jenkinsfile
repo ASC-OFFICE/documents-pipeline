@@ -306,7 +306,9 @@ def protectBranch(String repo, String branch) {
         "required_pull_request_reviews": null,
         "restrictions": {
           "users": [],
-          "teams": []
+          "teams": [
+            "dep-application-development-main-leads"
+          ]
         }
       }' | \
       gh api -X PUT repos/${repo}/branches/${branch}/protection --input -
@@ -353,12 +355,12 @@ def sendNotification() {
       case 'delete':  text += '♻️'; break
       default:        text += '➖'
     }
-    text += " [${repo.replaceAll('_','\\\\_')}](https://github.com/${repo})"
+    text += " [${repo}](https://github.com/${repo})"
   }
 
   if (params.action_type in ['start_release', 'merge_release', 'finish_release']
       && params.notify && stats.success > 0) {
-    sh label: "Send Telegram Message", script: "curl -X POST -s -S \
+    sh label: "Send Telegram Notification", script: "curl -X POST -s -S \
       -d parse_mode=markdown \
       -d chat_id=${chatId} \
       --data-urlencode text='${text}' \
