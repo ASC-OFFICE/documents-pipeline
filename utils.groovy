@@ -98,7 +98,7 @@ def checkoutRepos(String platform, String branch = 'master') {
         python print_repositories.py \
           --module \"${modules.join(' ')}\" \
           --platform \"${platform}\" \
-          --branding \"onlyoffice\"",
+          --branding \"r7\"",
       returnStdout: true
     )
   } else if (platform in ["mac_64", "linux_64"]) {
@@ -107,7 +107,7 @@ def checkoutRepos(String platform, String branch = 'master') {
         ./print_repositories.py \
           --module \"${modules.join(' ')}\" \
           --platform \"${platform}\" \
-          --branding \"onlyoffice\"",
+          --branding \"r7\"",
       returnStdout: true
     )
   }
