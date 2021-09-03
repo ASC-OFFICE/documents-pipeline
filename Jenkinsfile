@@ -12,7 +12,7 @@ defaults = [
   android:       false,
   core:          false,
   editors:       true,
-  builder:       false,
+  builder:       true,
   server_ce:     false,
   server_ee:     true,
   server_de:     false,
