@@ -2,13 +2,14 @@ name: Jenkins Clean Custom Workspace Job
 on: delete
 jobs:
   jenkins-remote-job:
+    if: ${{ startsWith(github.event.ref, 'hotfix') || startsWith(github.event.ref, 'release') }}
     runs-on: ubuntu-latest
     steps:
     - name: curl
       uses: wei/curl@v1
       with:
         args: >
-          -X POST -L
+          -X POST -L -k
           -u heatray:${{ secrets.JENKINS_TOKEN }}
           -d branch=${{ github.event.ref }}
-          https://jenkins.teamlab.info/job/clean-ws/buildWithParameters
+          https://jenkins.r7-office.ru/job/clean-ws/buildWithParameters

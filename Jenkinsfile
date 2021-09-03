@@ -1,4 +1,6 @@
 defaults = [
+  branch:        'experimental',
+  version:       '99.99.99',
   clean:         true,
   linux:         true,
   macos_64:      true,
@@ -13,7 +15,6 @@ defaults = [
   builder:       true,
   server_ce:     false,
   server_ee:     true,
-  server_ie:     true,
   server_de:     false,
   password:      true,
   beta:          false,
@@ -22,16 +23,20 @@ defaults = [
   schedule:      'H 17 * * *'
 ]
 
-if ('develop' == BRANCH_NAME) {
+if (BRANCH_NAME == 'develop') {
   defaults.putAll([
+    branch:        'unstable',
     macos_64:      false,
-    server_ie:     false,
     beta:          true
   ])
 }
 
-if (BRANCH_NAME.startsWith('hotfix') || BRANCH_NAME.startsWith('release')) {
-  defaults.schedule = 'H 23 * * *'
+if (BRANCH_NAME ==~ /^(hotfix|release)\/.+/) {
+  defaults.putAll([
+    branch:        'testing',
+    version:       BRANCH_NAME.replaceAll(/.+\/v(?=[0-9.]+)/,''),
+    schedule:      'H 23 * * *'
+  ])
 }
 
 node('master') {
@@ -43,11 +48,14 @@ pipeline {
   agent none
   environment {
     COMPANY_NAME = "R7-Office"
+    RELEASE_BRANCH = "${defaults.branch}"
+    PRODUCT_VERSION = "${defaults.version}"
     PUBLISHER_NAME = "AO \"NOVYE KOMMUNIKACIONNYE TEHNOLOGII\""
     PUBLISHER_URL = "http://r7-office.ru"
     SUPPORT_URL = "http://support.r7-office.ru"
     SUPPORT_MAIL = "support@r7-office.ru"
     TELEGRAM_TOKEN = credentials('telegram-bot-token')
+    S3_BUCKET = "repo-doc-onlyoffice-com"
   }
   options {
     buildDiscarder logRotator(daysToKeepStr: '90', artifactDaysToKeepStr: '30')
@@ -109,32 +117,27 @@ pipeline {
       defaultValue: defaults.core
     )
     booleanParam (
-      name:         'desktopeditor',
+      name:         'editors',
       description:  'Build and publish DesktopEditors packages',
       defaultValue: defaults.editors
     )
     booleanParam (
-      name:         'documentbuilder',
+      name:         'builder',
       description:  'Build and publish DocumentBuilder packages',
       defaultValue: defaults.builder
     )
     booleanParam (
-      name:         'documentserver',
+      name:         'server_ce',
       description:  'Build and publish DocumentServer packages',
       defaultValue: defaults.server_ce
     )
     booleanParam (
-      name:         'documentserver_ee',
+      name:         'server_ee',
       description:  'Build and publish DocumentServer-EE packages',
       defaultValue: defaults.server_ee
     )
     booleanParam (
-      name:         'documentserver_ie',
-      description:  'Build and publish DocumentServer-IE packages',
-      defaultValue: defaults.server_ie
-    )
-    booleanParam (
-      name:         'documentserver_de',
+      name:         'server_de',
       description:  'Build and publish DocumentServer-DE packages',
       defaultValue: defaults.server_de
     )
@@ -159,9 +162,14 @@ pipeline {
       defaultValue: defaults.sign
     )
     string (
-      name:         'extra_params',
-      description:  'configure.py extra params',
+      name:         'extra_args',
+      description:  'configure.py extra args',
       defaultValue: ''
+    )
+    booleanParam (
+      name:         'notify',
+      description:  'Telegram notification',
+      defaultValue: true
     )
   }
   triggers {
@@ -171,35 +179,14 @@ pipeline {
     stage('Prepare') {
       steps {
         script {
-          def branchName = env.BRANCH_NAME
-          def productVersion = "99.99.99"
-          def pV = branchName =~ /^(release|hotfix)\\/v(.*)$/
-          if (pV.find()) {
-            productVersion = pV.group(2)
-          } else {
-            pV = branchName =~ /^(master)$/
-            if (pV.find()) productVersion = "6.0.0"
-          }
-          env.PRODUCT_VERSION = productVersion
-
-          env.S3_BUCKET = 'repo-doc-onlyoffice-com'
-          env.RELEASE_BRANCH = branchName == 'develop' ? 'unstable' : 'testing'
-
           if (params.signing) env.ENABLE_SIGNING=1
 
-          deployDesktopList = []
-          deployBuilderList = []
-          deployServerCeList = []
-          deployServerEeList = []
-          deployServerDeList = []
-          deployAndroidList = []
+          s3region = "eu-west-1"
+          s3bucket = "repo-doc-onlyoffice-com"
+          s3deploy = "${s3bucket}/${env.COMPANY_NAME.toLowerCase()}/${env.RELEASE_BRANCH}"
+          listDeploy = []
           stageStats = [:]
         }
-      }
-      post {
-        fixed   { script { utils.setStageStats('fixed')   } }
-        failure { script { utils.setStageStats('failure') } }
-        success { script { utils.setStageStats('success') } }
       }
     }
     stage('Build') {
@@ -212,60 +199,47 @@ pipeline {
           }
           steps {
             script {
+              stageStats."${STAGE_NAME}" = false
+
               if (params.wipe)
                 deleteDir()
-              else if (params.clean && params.desktopeditor)
+              else if (params.clean && params.editors)
                 dir ('desktop-apps') { deleteDir() }
 
-              utils.checkoutRepos(env.BRANCH_NAME)
-
               String platform = "linux_64"
+              ArrayList listRepos = utils.getRepos(platform, env.BRANCH_NAME)
+              utils.checkoutRepos(listRepos)
 
-              if (params.core
-                  || params.documentbuilder
-                  || params.documentserver
-                  ) {
-                utils.linuxBuild(platform)
-                if (params.core)
-                  utils.deployCore(platform)
-                if (params.documentbuilder)
-                  utils.linuxBuildBuilder(platform)
-                if (params.documentserver)
-                  utils.linuxBuildServer(platform)
+              if (params.core || params.builder || params.server_ce) {
+                utils.build(platform)
+                if (params.builder)   utils.buildBuilder(platform)
+                if (params.server_ce) utils.buildServer(platform)
               }
 
-              if (params.desktopeditor) {
-                utils.linuxBuild(platform, "commercial")
-                utils.linuxBuildDesktop(platform)
-              }
+              if (params.editors || params.server_ee || params.server_de) {
+                utils.build(platform, "commercial")
 
-              if (params.documentserver_ee
-                  || params.documentserver_ie
-                  || params.documentserver_de
-                ) {
-                utils.linuxBuild(platform, "commercial")
-                if (params.documentserver_ee)
-                  utils.linuxBuildServer(platform, "documentserver-ee")
-                if (params.documentserver_ie)
-                  utils.linuxBuildServer(platform, "documentserver-ie")
-                // if (params.documentserver_ee || params.documentserver_ie)
-                //   utils.tagRepos("v${env.PRODUCT_VERSION}.${env.BUILD_NUMBER}")
-                if (params.documentserver_de)
-                  utils.linuxBuildServer(platform, "documentserver-de")
+                if (params.editors) {
+                  utils.buildEditors(platform)
+                }
+                if (params.server_ee) {
+                  utils.buildServer(platform, "enterprise")
+                  // utils.tagRepos(listRepos, "v${env.PRODUCT_VERSION}.${env.BUILD_NUMBER}")
+                }
+                if (params.server_de)
+                  utils.buildServer(platform, "developer")
               }
               if (params.test) utils.linuxTest()
+
+              stageStats."${STAGE_NAME}" = true
             }
           }
-          post {
-            fixed   { script { utils.setStageStats('fixed')   } }
-            failure { script { utils.setStageStats('failure') } }
-            success { script { utils.setStageStats('success') } }
-          }
         }
-        stage('macOS build') {
+        stage('macOS 64-bit build') {
           agent { label 'macos_64' }
           environment {
             FASTLANE_DISABLE_COLORS = '1'
+            FASTLANE_SKIP_UPDATE_CHECK = '1'
             APPLE_ID = credentials('macos-apple-id')
             TEAM_ID = credentials('macos-team-id')
             FASTLANE_APPLE_APPLICATION_SPECIFIC_PASSWORD = credentials('macos-apple-password')
@@ -277,33 +251,30 @@ pipeline {
           }
           steps {
             script {
+              stageStats."${STAGE_NAME}" = false
+
               if (params.wipe)
                 deleteDir()
-              else if (params.clean && params.desktopeditor)
+              else if (params.clean && params.editors)
                 dir ('desktop-apps') { deleteDir() }
 
-              utils.checkoutRepos(env.BRANCH_NAME)
-
               String platform = "mac_64"
+              ArrayList listRepos = utils.getRepos(platform, env.BRANCH_NAME)
+              utils.checkoutRepos(listRepos)
 
-              if (params.core) {
-                utils.macosBuild(platform)
-                utils.deployCore(platform)
+              if (params.core)
+                utils.build(platform)
+
+              if (params.editors) {
+                utils.build(platform, "commercial")
+                utils.buildEditors(platform)
               }
 
-              if (params.desktopeditor) {
-                utils.macosBuild(platform, "commercial")
-                utils.macosBuildDesktop()
-              }
+              stageStats."${STAGE_NAME}" = true
             }
           }
-          post {
-            fixed   { script { utils.setStageStats('fixed')   } }
-            failure { script { utils.setStageStats('failure') } }
-            success { script { utils.setStageStats('success') } }
-          }
         }
-        stage('macOS x86 build') {
+        stage('macOS 32-bit build') {
           agent { label 'macos_86' }
           environment {
             FASTLANE_DISABLE_COLORS = '1'
@@ -320,25 +291,24 @@ pipeline {
           }
           steps {
             script {
+              stageStats."${STAGE_NAME}" = false
+
               if (params.wipe)
                 deleteDir()
-              else if (params.clean && params.desktopeditor)
+              else if (params.clean && params.editors)
                 dir ('desktop-apps') { deleteDir() }
 
-              utils.checkoutRepos(env.BRANCH_NAME)
-
               String platform = "mac_64"
+              ArrayList listRepos = utils.getRepos(platform, env.BRANCH_NAME)
+              utils.checkoutRepos(listRepos)
 
-              if (params.desktopeditor) {
-                utils.macosBuild(platform, "commercial")
-                utils.macosBuildDesktop()
+              if (params.editors) {
+                utils.build(platform, "commercial")
+                utils.buildEditors(platform)
               }
+
+              stageStats."${STAGE_NAME}" = true              
             }
-          }
-          post {
-            fixed   { script { utils.setStageStats('fixed')   } }
-            failure { script { utils.setStageStats('failure') } }
-            success { script { utils.setStageStats('success') } }
           }
         }
         stage('Windows 64-bit build') {
@@ -354,51 +324,32 @@ pipeline {
           }
           steps {
             script {
+              stageStats."${STAGE_NAME}" = false
+
               if (params.wipe)
                 deleteDir()
-              else if (params.clean && params.desktopeditor)
+              else if (params.clean && params.editors)
                 dir ('desktop-apps') { deleteDir() }
 
-              utils.checkoutRepos(env.BRANCH_NAME)
-
               String platform = "win_64"
+              ArrayList listRepos = utils.getRepos(platform, env.BRANCH_NAME)
+              utils.checkoutRepos(listRepos)
 
-              if (params.core
-                  || params.documentbuilder
-                  || params.documentserver
-                  ) {
-                utils.windowsBuild(platform)
-                if (params.core)
-                  utils.deployCore(platform)
-                if (params.documentbuilder)
-                  utils.windowsBuildBuilder(platform)
-                if (params.documentserver)
-                  utils.windowsBuildServer(platform)
+              if (params.core || params.builder || params.server_ce) {
+                utils.build(platform)
+                if (params.builder)   utils.buildBuilder(platform)
+                if (params.server_ce) utils.buildServer(platform)
               }
 
-              if (params.desktopeditor) {
-                utils.windowsBuild(platform, "commercial")
-                utils.windowsBuildDesktop(platform)
+              if (params.editors || params.server_ee || params.server_de) {
+                utils.build(platform, "commercial")
+                if (params.editors)   utils.buildEditors(platform)
+                if (params.server_ee) utils.buildServer(platform, "enterprise")
+                if (params.server_de) utils.buildServer(platform, "developer")
               }
 
-              if (params.documentserver_ee
-                  || params.documentserver_ie
-                  || params.documentserver_de
-                ) {
-                utils.windowsBuild(platform, "commercial")
-                if (params.documentserver_ee)
-                  utils.windowsBuildServer(platform, "DocumentServer-EE")
-                if (params.documentserver_ie)
-                  utils.windowsBuildServer(platform, "DocumentServer-IE")
-                if (params.documentserver_de)
-                  utils.windowsBuildServer(platform, "DocumentServer-DE")
-              }
+              stageStats."${STAGE_NAME}" = true
             }
-          }
-          post {
-            fixed   { script { utils.setStageStats('fixed')   } }
-            failure { script { utils.setStageStats('failure') } }
-            success { script { utils.setStageStats('success') } }
           }
         }
         stage('Windows 32-bit build') {
@@ -414,33 +365,29 @@ pipeline {
           }
           steps {
             script {
+              stageStats."${STAGE_NAME}" = false
+
               if (params.wipe)
                 deleteDir()
-              else if (params.clean && params.desktopeditor)
+              else if (params.clean && params.editors)
                 dir ('desktop-apps') { deleteDir() }
 
-              utils.checkoutRepos(env.BRANCH_NAME)
-
               String platform = "win_32"
+              ArrayList listRepos = utils.getRepos(platform, env.BRANCH_NAME)
+              utils.checkoutRepos(listRepos)
 
-              if (params.core || params.documentbuilder) {
-                utils.windowsBuild(platform)
-                if (params.core)
-                  utils.deployCore(platform)
-                if (params.documentbuilder)
-                  utils.windowsBuildBuilder(platform)
+              if (params.core || params.builder) {
+                utils.build(platform)
+                if (params.builder) utils.buildBuilder(platform)
               }
 
-              if (params.desktopeditor) {
-                utils.windowsBuild(platform, "commercial")
-                utils.windowsBuildDesktop(platform)
+              if (params.editors) {
+                utils.build(platform, "commercial")
+                utils.buildEditors(platform)
               }
+
+              stageStats."${STAGE_NAME}" = true
             }
-          }
-          post {
-            fixed   { script { utils.setStageStats('fixed')   } }
-            failure { script { utils.setStageStats('failure') } }
-            success { script { utils.setStageStats('success') } }
           }
         }
         stage('Windows XP 64-bit build') {
@@ -459,24 +406,24 @@ pipeline {
           }
           steps {
             script {
+              stageStats."${STAGE_NAME}" = false
+
               if (params.wipe)
                 deleteDir()
-              else if (params.clean && params.desktopeditor)
+              else if (params.clean && params.editors)
                 dir ('desktop-apps') { deleteDir() }
 
-              utils.checkoutRepos(env.BRANCH_NAME)
-
               String platform = "win_64_xp"
-              if (params.desktopeditor) {
-                utils.windowsBuild(platform, "commercial")
-                utils.windowsBuildDesktop(platform)
+              ArrayList listRepos = utils.getRepos(platform, env.BRANCH_NAME)
+              utils.checkoutRepos(listRepos)
+
+              if (params.editors) {
+                utils.build(platform, "commercial")
+                utils.buildEditors(platform)
               }
+
+              stageStats."${STAGE_NAME}" = true
             }
-          }
-          post {
-            fixed   { script { utils.setStageStats('fixed')   } }
-            failure { script { utils.setStageStats('failure') } }
-            success { script { utils.setStageStats('success') } }
           }
         }
         stage('Windows XP 32-bit build') {
@@ -495,43 +442,42 @@ pipeline {
           }
           steps {
             script {
+              stageStats."${STAGE_NAME}" = false
+
               if (params.wipe)
                 deleteDir()
-              else if (params.clean && params.desktopeditor)
+              else if (params.clean && params.editors)
                 dir ('desktop-apps') { deleteDir() }
 
-              utils.checkoutRepos(env.BRANCH_NAME)
-
               String platform = "win_32_xp"
-              if (params.desktopeditor) {
-                utils.windowsBuild(platform, "commercial")
-                utils.windowsBuildDesktop(platform)
+              ArrayList listRepos = utils.getRepos(platform, env.BRANCH_NAME)
+              utils.checkoutRepos(listRepos)
+
+              if (params.editors) {
+                utils.build(platform, "commercial")
+                utils.buildEditors(platform)
               }
+
+              stageStats."${STAGE_NAME}" = true
             }
-          }
-          post {
-            fixed   { script { utils.setStageStats('fixed')   } }
-            failure { script { utils.setStageStats('failure') } }
-            success { script { utils.setStageStats('success') } }
           }
         }
         stage('Android build') {
-          agent { label 'linux_64' }
+          agent { label 'android' }
           when {
             expression { params.android && params.core }
             beforeAgent true
           }
           steps {
             script {
+              stageStats."${STAGE_NAME}" = false
+
               if (params.wipe) deleteDir()
 
-              utils.androidBuild(env.BRANCH_NAME)
+              utils.buildAndroid(env.BRANCH_NAME)
+
+              stageStats."${STAGE_NAME}" = true
             }
-          }
-          post {
-            fixed   { script { utils.setStageStats('fixed')   } }
-            failure { script { utils.setStageStats('failure') } }
-            success { script { utils.setStageStats('success') } }
           }
         }
       }
@@ -541,7 +487,7 @@ pipeline {
     always {
       node('master') {
         script {
-          utils.createReports()
+          utils.generateReports()
         }
       }
       script {
@@ -566,7 +512,7 @@ pipeline {
     failure {
       node('master') {
         script {
-          utils.sendTelegramMessage(utils.getJobStats('failure'), '-342815292')
+          utils.sendTelegramMessage(utils.getJobStats('failed'), '-342815292')
         }
       }
     }
