@@ -138,7 +138,6 @@ def getConfigArgs(String platform = 'native', String license = 'opensource') {
   args.add("--qt-dir ${env.QT_PATH}")
   if (isWinXP) args.add("--qt-dir-xp ${env.QT56_PATH}")
   args.add("--branding \"r7\"")
-  args.add("--branding \"r7-office\"")
   if (isMacOS) args.add("--compiler \"clang\"")
   if (isMacOS86) args.add("--config \"use_v8\"")
   if (params.password_protection) args.add("--features \"enable_protection disable_signatures\"")
