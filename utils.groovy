@@ -14,25 +14,50 @@ void checkoutRepo(String repo, String branch = 'master', String dir = repo.minus
   ])
 }
 
+def checkModule(String module, String platform, String license = "all") {
+  Boolean bOpenSource = license == "opensource" || license == "all"
+  Boolean bCommercial = license == "commercial" || license == "all"
+  Boolean bCore = params.core && bOpenSource
+  Boolean bDesktop = params.desktop && bCommercial
+  Boolean bBuilder = params.builder && bCommercial
+  Boolean bServer = (params.server_ce && bOpenSource) \
+    || ((params.server_de || params.server_ee) && bCommercial)
+  def table = [
+    win_64:    [ core: bCore, desktop: bDesktop, builder: bBuilder, server: bServer ],
+    win_32:    [ core: bCore, desktop: bDesktop, builder: false,    server: false   ],
+    win_64_xp: [ core: false, desktop: bDesktop, builder: false,    server: false   ],
+    win_32_xp: [ core: false, desktop: bDesktop, builder: false,    server: false   ],
+    mac_64:    [ core: bCore, desktop: bDesktop, builder: false,    server: false   ],
+    mac_64_v8: [ core: false, desktop: bDesktop, builder: false,    server: false   ],
+    mac_arm64: [ core: bCore, desktop: bDesktop, builder: false,    server: false   ],
+    linux_64:  [ core: bCore, desktop: bDesktop, builder: bBuilder, server: bServer ]
+  ]
+  return table."${platform}"."${module}"
+}
+
 return this
 
-def getRepos(String platform, String branch = 'master') {
+def getConstRepos(String branch = 'master') {
+  return [
+    [ owner: "ONLYOFFICE", name: "build_tools" ],
+    [ owner: "ASC-OFFICE", name: "r7" ]
+  ].each {
+    it.branch = branch
+    it.dir = it.name
+  }
+}
+
+def getVarRepos(String platform, String branch = 'master') {
   ArrayList repos = []
   ArrayList modules = []
   String reposOutput
 
-  checkoutRepo("ONLYOFFICE/build_tools", branch)
-  checkoutRepo("ASC-OFFICE/r7", branch)
+  checkoutRepos(getConstRepos(branch))
 
-  if (params.core && platform in ["win_64", "win_32", "mac_64", "linux_64"])
-    modules.add("core")
-  if (params.editors)
-    modules.add("desktop")
-  if ((params.server_ce || params.server_de || params.server_ee)
-    && platform in ["win_64", "linux_64"])
-    modules.add("server")
-  if (params.builder && platform in ["win_64", "win_32", "linux_64"])
-    modules.add("builder")
+  if (checkModule("core",platform))    modules.add("core")
+  if (checkModule("desktop",platform)) modules.add("desktop")
+  if (checkModule("builder",platform)) modules.add("builder")
+  if (checkModule("server",platform))  modules.add("server")
 
   if (platform.startsWith("win")) {
     reposOutput = powershell(
@@ -80,7 +105,7 @@ def getRepos(String platform, String branch = 'master') {
 void checkoutRepos(ArrayList repos) {
   echo repos.collect({"${it.owner}/${it.name} (${it.branch})"}).join("\n")
   repos.each {
-    checkoutRepo("${it.owner}/${it.name}", it.branch, it.dir)
+    checkoutRepo(it.owner + "/" + it.name, it.branch, it.dir)
   }
 }
 
@@ -99,36 +124,12 @@ void tagRepos(ArrayList repos, String tag) {
 // Configure
 
 def getConfigArgs(String platform = 'native', String license = 'opensource') {
-  Boolean core = false
-  Boolean editors = false
-  Boolean builder = false
-  Boolean server = false
-  // Boolean branding = false
-
-  switch(license) {
-    case "opensource":
-      core = params.core
-      builder = params.builder
-      server = params.server_ce
-      break
-    case "commercial":
-      editors = params.editors
-      server = params.server_ee || params.server_de
-      // branding = true
-      break
-  }
-
-  Boolean isWin = platform.startsWith("win")
-  Boolean isWinXP = isWin && platform.endsWith("_xp")
-  Boolean isMacOS = platform.startsWith("mac")
-  Boolean isMacOS86 = isMacOS && env._X86 == "1"
-
   ArrayList modules = []
-  if (core)                modules.add("core")
-  if (editors)             modules.add("desktop")
-  if (builder && !isMacOS) modules.add("builder")
-  if (server && !isMacOS)  modules.add("server")
-  if (isWin)               modules.add("tests")
+  if (checkModule("core",platform,license))    modules.add("core")
+  if (checkModule("desktop",platform,license)) modules.add("desktop")
+  if (checkModule("builder",platform,license)) modules.add("builder")
+  if (checkModule("server",platform,license))  modules.add("server")
+  if (platform.startsWith("win"))              modules.add("tests")
 
   ArrayList args = []
   args.add("--module \"${modules.join(' ')}\"")
@@ -136,13 +137,20 @@ def getConfigArgs(String platform = 'native', String license = 'opensource') {
   args.add("--update false")
   args.add("--clean ${params.clean.toString()}")
   args.add("--qt-dir ${env.QT_PATH}")
-  if (isWinXP) args.add("--qt-dir-xp ${env.QT56_PATH}")
+  if (platform.endsWith("_xp"))
+    args.add("--qt-dir-xp ${env.QT56_PATH}")
+  // if (license == "commercial")
   args.add("--branding \"r7\"")
-  if (isMacOS) args.add("--compiler \"clang\"")
-  if (isMacOS86) args.add("--config \"use_v8\"")
-  if (params.password_protection) args.add("--features \"enable_protection disable_signatures\"")
-  if (params.beta) args.add("--beta 1")
-  if (!params.extra_args.isEmpty()) args.add(params.extra_args)
+  if (platform.startsWith("mac"))
+    args.add("--compiler \"clang\"")
+  if (platform == "mac_64" && env.USE_V8 == "1")
+    args.add("--config \"use_v8\"")
+  if (params.password_protection)
+    args.add("--features \"enable_protection disable_signatures\"")
+  if (params.beta)
+    args.add("--beta 1")
+  if (!params.extra_args.isEmpty())
+    args.add(params.extra_args)
 
   return args.join(' ')
 }
@@ -158,7 +166,7 @@ void build(String platform, String license = 'opensource') {
       call python configure.py ${getConfigArgs(platform, license)} && \
       call python make.py"
 
-  } else if (platform in ["mac_64", "linux_64"]) {
+  } else {
 
     sh "cd build_tools && \
       ./configure.py ${getConfigArgs(platform, license)} && \
@@ -207,6 +215,7 @@ void buildEditors (String platform) {
   String version = "${env.PRODUCT_VERSION}-${env.BUILD_NUMBER}"
   String product = "editors"
   String fplatform
+  String macosDeployPath
 
   if (platform.startsWith("win")) {
 
@@ -224,33 +233,36 @@ void buildEditors (String platform) {
         "windows/editors/${version}/", product, fplatform, "WinSparkle")
     }
 
-  } else if (platform == "mac_64") {
+  } else if (platform.startsWith("mac")) {
 
-    sh "cd ~/Library/Developer/Xcode/Archives && rm -rfv *"
+    sh "rm -rfv \
+      ~/Library/Developer/Xcode/Archives/* \
+      ~/Library/Caches/Sparkle_generate_appcast/*"
     sh "cd build_tools && ./make_packages.py"
 
-    String scheme = "R7-Office"
     String appName = "R7-Office"
     String appVersion = sh (
       script: "mdls -name kMDItemVersion -raw desktop-apps/macos/build/${appName}.app",
       returnStdout: true).trim()
-    String zipName = "${scheme}-${appVersion}"
-    String subdir = env._X86 != '1' ? "editors_x64" : "editors_x86"
-    fplatform = env._X86 != '1' ? "macOS x64" : "macOS x86"
+    String scheme
+    if (platform == "mac_64" && env.USE_V8 == '1') {
+      fplatform = "macOS x86-64 V8 (legacy)"
+      scheme = "R7-Office-v8"
+      macosDeployPath = "v8"
+    } else if (platform == "mac_64") {
+      fplatform = "macOS x86-64"
+      scheme = "R7-Office-x86_64"
+      macosDeployPath = "x86_64"
+    } else if (platform == "mac_arm64") {
+      fplatform = "macOS ARM64"
+      scheme = "R7-Office-arm"
+      macosDeployPath = "arm"
+    }
 
     dir ("desktop-apps/macos/build") {
-      uploadFiles("${appName}.dmg", "macos/${scheme}-${version}.dmg",
-        product, fplatform, "Disk Image")
-      uploadFiles("update/${zipName}.zip", "macos/${subdir}/${version}/",
-        product, fplatform, "Sparkle")
-      uploadFiles("update/${appName}*.delta", "macos/${subdir}/${version}/",
-        product, fplatform, "Sparkle")
-      uploadFiles("update/*.xml", "macos/${subdir}/${version}/",
-        product, fplatform, "Sparkle")
-      uploadFiles("update/${zipName}.html", "macos/${subdir}/${version}/ReleaseNotes.html",
-        product, fplatform, "Sparkle")
-      // uploadFiles("update/${zipName}.ru.html", "macos/${subdir}/${version}/ReleaseNotesRU.html",
-      //   product, fplatform, "Sparkle")
+      uploadFiles("*.dmg", "macos/${macosDeployPath}/${version}/", product, fplatform, "Disk Image")
+      uploadFiles("${scheme}-*.zip,update/*.delta,update/*.xml,update/*.html",
+        "macos/${macosDeployPath}/${version}/", product, fplatform, "Sparkle")
     }
 
   } else if (platform == "linux_64") {
