@@ -90,11 +90,11 @@ def getConfigArgs(String platform = 'native', String license = 'opensource') {
   switch(license) {
     case "opensource":
       core = params.core
-      builder = params.builder
       server = params.server_ce
       break
     case "commercial":
       editors = params.editors
+      builder = params.builder
       server = params.server_ee || params.server_de
       branding = true
       break
