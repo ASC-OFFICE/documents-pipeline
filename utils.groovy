@@ -228,7 +228,7 @@ void buildEditors (String platform) {
       ~/Library/Developer/Xcode/Archives/* \
       ~/Library/Caches/Sparkle_generate_appcast/*"
     sh "cd build_tools && \
-      ./make_packages.py --product desktop --package ${buildPackage}"
+      ./make_packages.py --product desktop --package ${buildPackage} --branding r7"
 
     String appVersion = sh (
       script: "mdls -name kMDItemVersion -raw desktop-apps/macos/build/R7-Office.app",
