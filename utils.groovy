@@ -231,7 +231,8 @@ void buildEditors (String platform) {
       ./make_packages.py --product desktop --package ${buildPackage} --branding r7"
 
     String appVersion = sh (
-      script: "mdls -name kMDItemVersion -raw desktop-apps/macos/build/R7-Office.app",
+      script: "/usr/libexec/PlistBuddy -c 'print :CFBundleShortVersionString' \
+        r7/desktop-apps/macos/build/R7-Office.app/Contents/Info.plist",
       returnStdout: true).trim()
 
     dir ("desktop-apps/macos/build") {
