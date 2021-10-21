@@ -235,7 +235,7 @@ void buildEditors (String platform) {
         r7/desktop-apps/macos/build/R7-Office.app/Contents/Info.plist",
       returnStdout: true).trim()
 
-    dir ("desktop-apps/macos/build") {
+    dir ("r7/desktop-apps/macos/build") {
       uploadFiles("*.dmg", "macos/${macosDeployPath}/${version}/", product, fplatform, "Disk Image")
       uploadFiles("${scheme}-*.zip,update/*.delta,update/*.xml,update/*.html",
         "macos/${macosDeployPath}/${version}/", product, fplatform, "Sparkle")
