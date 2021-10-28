@@ -204,8 +204,7 @@ void build(String platform, String license = 'opensource') {
 void buildDesktop (String platform) {
   String version = "${env.PRODUCT_VERSION}-${env.BUILD_NUMBER}"
   String product = "desktop"
-  String fplatform
-  String macosDeployPath
+  String buildPackage, fplatform, scheme, macosDeployPath
 
   if (platform.startsWith("win")) {
 
@@ -225,31 +224,35 @@ void buildDesktop (String platform) {
 
   } else if (platform.startsWith("mac")) {
 
-    sh "rm -rfv \
-      ~/Library/Developer/Xcode/Archives/* \
-      ~/Library/Caches/Sparkle_generate_appcast/*"
-    sh "cd build_tools && ./make_packages.py"
-
-    String appName = "R7-Office"
-    String appVersion = sh (
-      script: "mdls -name kMDItemVersion -raw desktop-apps/macos/build/${appName}.app",
-      returnStdout: true).trim()
-    String scheme
     if (platform == "mac_64" && env.USE_V8 == '1') {
+      buildPackage = "diskimage-v8-x86_64"
       fplatform = "macOS x86-64 V8 (legacy)"
       scheme = "R7-Office-v8"
       macosDeployPath = "v8"
     } else if (platform == "mac_64") {
+      buildPackage = "diskimage-x86_64"
       fplatform = "macOS x86-64"
       scheme = "R7-Office-x86_64"
       macosDeployPath = "x86_64"
     } else if (platform == "mac_arm64") {
+      buildPackage = "diskimage-arm64"
       fplatform = "macOS ARM64"
       scheme = "R7-Office-arm"
       macosDeployPath = "arm"
     }
 
-    dir ("desktop-apps/macos/build") {
+    sh "rm -rfv \
+      ~/Library/Developer/Xcode/Archives/* \
+      ~/Library/Caches/Sparkle_generate_appcast/*"
+    sh "cd build_tools && \
+      ./make_packages.py --product desktop --package ${buildPackage} --branding r7"
+
+    String appVersion = sh (
+      script: "/usr/libexec/PlistBuddy -c 'print :CFBundleShortVersionString' \
+        r7/desktop-apps/macos/build/R7-Office.app/Contents/Info.plist",
+      returnStdout: true).trim()
+
+    dir ("r7/desktop-apps/macos/build") {
       uploadFiles("*.dmg", "macos/${macosDeployPath}/${version}/", product, fplatform, "Disk Image")
       uploadFiles("${scheme}-*.zip,update/*.delta,update/*.xml,update/*.html",
         "macos/${macosDeployPath}/${version}/", product, fplatform, "Sparkle")
@@ -268,7 +271,7 @@ void buildDesktop (String platform) {
       uploadFiles("rpm/**/*.rpm",     "centos/",   product, fplatform, "CentOS")
       uploadFiles("apt-rpm/**/*.rpm", "altlinux/", product, fplatform, "AltLinux")
       uploadFiles("urpmi/**/*.rpm",   "rosa/",     product, fplatform, "Rosa")
-      uploadFiles("tar/*.tar.gz",     "linux/",    product, fplatform, "Portable")
+      uploadFiles("tar/**/*.tar.gz",  "linux/",    product, fplatform, "Portable")
       uploadFiles("deb-astra/*.deb", "astralinux/", product, fplatform, "AstraLinux Signed")
     }
 

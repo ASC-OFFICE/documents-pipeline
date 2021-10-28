@@ -4,7 +4,7 @@ defaults = [
   clean:         true,
   linux:         true,
   macos_64:      true,
-  macos_64_v8:   true,
+  macos_64_v8:   false,
   macos_arm64:   true,
   windows_64:    true,
   windows_32:    true,
@@ -28,7 +28,6 @@ if (BRANCH_NAME == 'develop') {
   defaults.putAll([
     branch:        'unstable',
     macos_64:      false,
-    macos_64_v8:   false,
     macos_arm64:   false,
     beta:          true
   ])
