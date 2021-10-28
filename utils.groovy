@@ -1,30 +1,4 @@
-def checkoutRepo(Map repo, String branch = 'master') {
-  String resolvedBranch
-  if (branch != 'master') {
-    resolvedBranch = resolveScm(
-      source: [
-        $class: 'GitSCMSource',
-        remote: "git@github.com:${repo.owner}/${repo.name}.git",
-        traits: [gitBranchDiscovery()]
-      ],
-      targets: [branch, 'master']
-    ).branches[0]
-  } else {
-    resolvedBranch = 'master'
-  }
-  checkout([
-    $class: 'GitSCM',
-    branches: [[name: resolvedBranch]],
-    doGenerateSubmoduleConfigurations: false,
-    extensions: [
-      [$class: 'SubmoduleOption', recursiveSubmodules: true],
-      [$class: 'RelativeTargetDirectory', relativeTargetDir: repo.dir],
-      [$class: 'ScmName', name: "${repo.owner}/${repo.name}"]
-    ],
-    submoduleCfg: [],
-    userRemoteConfigs: [[url: "git@github.com:${repo.owner}/${repo.name}.git"]]
-  ])
-}
+// Repos
 
 listRepos = [
   [name: 'build_tools'],
@@ -36,9 +10,8 @@ listRepos = [
   [name: 'document-builder-package'],
   [name: 'document-server-integration'],
   [name: 'document-server-package'],
-  // [name: 'document-templates'],
+  [name: 'document-templates'],
   [name: 'documents-pipeline'],
-  // [name: 'onlyoffice'],
   [name: 'plugin-autocomplete',  dir: 'sdkjs-plugins/plugin-autocomplete'],
   [name: 'plugin-easybib',       dir: 'sdkjs-plugins/plugin-easybib'],
   [name: 'plugin-glavred',       dir: 'sdkjs-plugins/plugin-glavred'],
@@ -69,18 +42,33 @@ listRepos = [
   [owner: 'ASC-OFFICE', name: 'r7']
 ].each {
   if (it.owner == null) it.owner = 'ONLYOFFICE'
-  if (it.dir == null)   it.dir = it.name
 }
 
 return this
 
-def checkoutRepos(String branch = 'master') {    
+void checkoutRepo(Map repo, String branch = 'master') {
+  if (repo.dir == null) repo.dir = repo.name
+  checkout([
+    $class: 'GitSCM',
+    branches: [[name: branch]],
+    doGenerateSubmoduleConfigurations: false,
+    extensions: [
+      [$class: 'SubmoduleOption', recursiveSubmodules: true],
+      [$class: 'RelativeTargetDirectory', relativeTargetDir: repo.dir],
+      [$class: 'ScmName', name: "${repo.owner}/${repo.name}"]
+    ],
+    submoduleCfg: [],
+    userRemoteConfigs: [[url: "git@github.com:${repo.owner}/${repo.name}.git"]]
+  ])
+}
+
+void checkoutRepos(String branch = 'master') {
   for (repo in listRepos) {
     checkoutRepo(repo, branch)
   }
 }
 
-def tagRepos(String tag) {
+void tagRepos(String tag) {
   for (repo in listRepos) {
     sh "cd ${repo.dir} && \
       git tag -l | xargs git tag -d && \
@@ -90,460 +78,451 @@ def tagRepos(String tag) {
   }
 }
 
-def getConfParams(String platform, String license) {
-  def modules = []
-  if (params.core && license == "opensource") {
-    modules.add('core')
+// Configure
+
+def getConfigArgs(String platform = 'native', String license = 'opensource') {
+  Boolean core = false
+  Boolean editors = false
+  Boolean builder = false
+  Boolean server = false
+  Boolean branding = false
+
+  switch(license) {
+    case "opensource":
+      core = params.core
+      server = params.server_ce
+      break
+    case "commercial":
+      editors = params.editors
+      builder = params.builder
+      server = params.server_ee || params.server_de
+      branding = true
+      break
   }
-  // Add module to build to enforce clean it on build
-  if (params.desktopeditor && license == "commercial") {
-    modules.add('desktop')
-  }
-  if (platform != "mac_64") {
-    if (params.documentbuilder && license == "opensource") {
-      modules.add('builder')
-    }
-    if ((params.documentserver && license == "opensource")
-      || ((params.documentserver_ee || params.documentserver_ie
-      || params.documentserver_de) && license == "commercial")) {
-      modules.add('server')
-    }
-  }
+
+  Boolean isWin = platform.startsWith("win")
+  Boolean isWinXP = isWin && platform.endsWith("_xp")
+  Boolean isMacOS = platform.startsWith("mac")
+
+  ArrayList modules = []
+  if (core)                modules.add("core")
+  if (editors)             modules.add("desktop")
+  if (builder && !isMacOS) modules.add("builder")
+  if (server && !isMacOS)  modules.add("server")
+  if (isWin)               modules.add("tests")
+
+  ArrayList args = []
+  args.add("--module \"${modules.join(' ')}\"")
+  args.add("--platform \"${platform}\"")
+  args.add("--update false")
+  args.add("--clean ${params.clean.toString()}")
+  args.add("--qt-dir ${env.QT_PATH}")
+  if (isWinXP) args.add("--qt-dir-xp ${env.QT56_PATH}")
+  if (branding) args.add("--branding \"r7\"")
+  if (isMacOS) args.add("--compiler \"clang\"")
+  if (env.USE_V8 == "1") args.add("--config \"use_v8\"")
+  if (params.beta) args.add("--beta 1")
+  if (params.password_protection) args.add("--features \"enable_protection disable_signatures\"")
+  if (!params.extra_args.isEmpty()) args.add(params.extra_args)
+
+  return args.join(' ')
+}
+
+// Build
+
+void build(String platform, String license = 'opensource') {
+  Boolean isUnix = false
+
   if (platform.startsWith("win")) {
-    modules.add('tests')
+
+    bat "cd build_tools && \
+      call python configure.py ${getConfigArgs(platform, license)} && \
+      call python make.py"
+
+  } else {
+
+    sh "cd build_tools && \
+      ./configure.py ${getConfigArgs(platform, license)} && \
+      ./make.py"
+    isUnix = true
+
   }
 
-  def confParams = []
-  confParams.add("--module \"${modules.join(' ')}\"")
-  confParams.add("--platform ${platform}")
-  confParams.add("--update false")
-  confParams.add("--clean ${params.clean.toString()}")
-  confParams.add("--qt-dir ${env.QT_PATH}")
-  if (platform.endsWith("_xp")) {
-    confParams.add("--qt-dir-xp ${env.QT56_PATH}")
-  }
-  confParams.add("--branding r7")
-  confParams.add("--branding-name r7-office")
-  if (platform == "mac_64") {
-    confParams.add("--compiler \"clang\"")
-    if (env._X86 == "1") confParams.add("--config \"use_v8\"")
-  }
-  if (params.password_protection) {
-    confParams.add("--features \"enable_protection disable_signatures\"")
-  }
-  if (params.beta) {
-    confParams.add("--beta 1")
-  }
-  if (!params.extra_params.isEmpty()) {
-    confParams.add(params.extra_params)
-  }
+  // if (license == "opensource") {
+  if (false) {
+    String os, arch, version
+    String branch = env.BRANCH_NAME
 
-  return confParams.join(' ')
-}
+    if (platform.startsWith("win"))   os = "windows" else
+    if (platform.startsWith("mac"))   os = "mac"     else
+    if (platform.startsWith("linux")) os = "linux"
 
-def linuxBuild(String platform = 'native', String license = 'opensource') {
-  sh "cd build_tools && \
-    ./configure.py ${getConfParams(platform, license)} &&\
-    ./make.py"
-}
+    if (platform in ["win_64", "win_32"])
+      version = "${env.PRODUCT_VERSION}.${env.BUILD_NUMBER}" else
+    if (platform in ["linux_64", "mac_64"])
+      version = "${env.PRODUCT_VERSION}-${env.BUILD_NUMBER}"
 
-def linuxBuildDesktop(String platform = 'native') {
-  sh "cd desktop-apps/win-linux/package/linux &&\
-    make clean &&\
-    make deploy -e BRANDING_DIR=../../../../r7/desktop-apps/win-linux/package/linux"
+    if (platform.endsWith("_32")) arch = "x86" else
+    if (platform.endsWith("_64")) arch = "x64"
 
-  def deployData = readJSON file: "desktop-apps/win-linux/package/linux/deploy.json"
+    Closure coreDeployPath = {
+      return "${env.S3_BUCKET}/${os}/core/${branch}/${it}/${arch}"
+    }
 
-  for(item in deployData.items) {
-    println item
-    deployDesktopList.add(item)
+    String cmdUpload = """
+      aws s3 cp --acl public-read --no-progress \
+        build_tools/out/${platform}/r7-office/core/core.7z \
+        s3://${coreDeployPath(version)}/
+      aws s3 sync --delete --acl public-read --no-progress \
+        s3://${coreDeployPath(version)}/ \
+        s3://${coreDeployPath('latest')}/
+    """
+
+    if (isUnix) sh cmdUpload else bat cmdUpload
   }
 }
 
-def linuxBuildBuilder(String platform = 'native') {
-  sh "cd document-builder-package &&\
-    make clean &&\
-    make deploy -e BRANDING_DIR=../r7/document-builder-package"
+// Build Packages
 
-  def deployData = readJSON file: "document-builder-package/deploy.json"
+void buildEditors (String platform) {
+  String version = "${env.PRODUCT_VERSION}-${env.BUILD_NUMBER}"
+  String product = "editors"
+  String buildPackage, fplatform, macosDeployPath, scheme
 
-  for(item in deployData.items) {
-    println item
-    deployBuilderList.add(item)
+  if (platform.startsWith("win")) {
+
+    bat "cd desktop-apps && \
+      make clean-package && \
+      make packages -e BRANDING_DIR=../r7/desktop-apps"
+
+    if (platform.startsWith("win_64")) fplatform = "Windows x64" else
+    if (platform.startsWith("win_32")) fplatform = "Windows x86"
+
+    dir ("desktop-apps/win-linux/package/windows") {
+      uploadFiles("*.exe", "windows/", product, fplatform, "Installer")
+      uploadFiles("*.zip", "windows/", product, fplatform, "Portable")
+      uploadFiles("update/*.exe,update/*.xml,update/*.html",
+        "windows/editors/${version}/", product, fplatform, "WinSparkle")
+    }
+
+  } else if (platform.startsWith("mac")) {
+
+    if (platform == "mac_64" && env.USE_V8 == '1') {
+      buildPackage = "diskimage-v8-x86_64"
+      fplatform = "macOS x86-64 V8 (legacy)"
+      scheme = "R7-Office-v8"
+      macosDeployPath = "v8"
+    } else if (platform == "mac_64") {
+      buildPackage = "diskimage-x86_64"
+      fplatform = "macOS x86-64"
+      scheme = "R7-Office-x86_64"
+      macosDeployPath = "x86_64"
+    } else if (platform == "mac_arm64") {
+      buildPackage = "diskimage-arm64"
+      fplatform = "macOS ARM64"
+      scheme = "R7-Office-arm"
+      macosDeployPath = "arm"
+    }
+
+    sh "rm -rfv \
+      ~/Library/Developer/Xcode/Archives/* \
+      ~/Library/Caches/Sparkle_generate_appcast/*"
+    sh "cd build_tools && \
+      ./make_packages.py --product desktop --package ${buildPackage} --branding r7"
+
+    String appVersion = sh (
+      script: "/usr/libexec/PlistBuddy -c 'print :CFBundleShortVersionString' \
+        r7/desktop-apps/macos/build/R7-Office.app/Contents/Info.plist",
+      returnStdout: true).trim()
+
+    dir ("r7/desktop-apps/macos/build") {
+      uploadFiles("*.dmg", "macos/${macosDeployPath}/${version}/", product, fplatform, "Disk Image")
+      uploadFiles("${scheme}-*.zip,update/*.delta,update/*.xml,update/*.html",
+        "macos/${macosDeployPath}/${version}/", product, fplatform, "Sparkle")
+    }
+
+  } else if (platform == "linux_64") {
+
+    sh "cd desktop-apps/win-linux/package/linux && \
+      make clean && \
+      make packages -e BRANDING_DIR=../../../../r7/desktop-apps/win-linux/package/linux"
+
+    fplatform = "Linux x64"
+
+    dir ("desktop-apps/win-linux/package/linux") {
+      uploadFiles("deb/*.deb",        "ubuntu/",   product, fplatform, "Ubuntu")
+      uploadFiles("rpm/**/*.rpm",     "centos/",   product, fplatform, "CentOS")
+      uploadFiles("apt-rpm/**/*.rpm", "altlinux/", product, fplatform, "AltLinux")
+      uploadFiles("urpmi/**/*.rpm",   "rosa/",     product, fplatform, "Rosa")
+      uploadFiles("tar/**/*.tar.gz",     "linux/",    product, fplatform, "Portable")
+      uploadFiles("deb-astra/*.deb", "astralinux/", product, fplatform, "AstraLinux Signed")
+    }
+
   }
 }
 
-def linuxBuildServer(String platform = 'native', String productName='documentserver') {
-  sh "cd document-server-package && \
-    export PRODUCT_NAME=${productName} && \
-    make clean && \
-    make deploy -e BRANDING_DIR=../r7/document-server-package"
+void buildBuilder(String platform) {
+  String version = "${env.PRODUCT_VERSION}-${env.BUILD_NUMBER}"
+  String product = "builder"
+  String fplatform
 
-  sh "cd Docker-DocumentServer && \
-    export PRODUCT_NAME=${productName} && \
-    export ONLYOFFICE_VALUE=ds && \
-    make clean && \
-    make deploy"
+  if (platform.startsWith("win")) {
 
-  def deployData = readJSON file: "document-server-package/deploy.json"
+    bat "cd document-builder-package && \
+      make clean && \
+      make packages -e BRANDING_DIR=../r7/document-builder-package"
 
-  for(item in deployData.items) {
-    println item
-    switch(productName) {
-      case 'documentserver':
-        deployServerCeList.add(item)
-        break
-      case 'documentserver-ee':
-        deployServerEeList.add(item)
-        break
-      case 'documentserver-de':
-        deployServerDeList.add(item)
-        break
+    if (platform.startsWith("win_64")) fplatform = "Windows x64" else
+    if (platform.startsWith("win_32")) fplatform = "Windows x86"
+
+    dir ("document-builder-package") {
+      uploadFiles("exe/*.exe", "windows/", product, fplatform, "Installer")
+      uploadFiles("zip/*.zip", "windows/", product, fplatform, "Portable")
+    }
+
+  } else if (platform == "linux_64") {
+
+    sh "cd document-builder-package && \
+      make clean && \
+      make packages -e BRANDING_DIR=../r7/document-builder-package"
+
+    fplatform = "Linux x64"
+
+    dir ("document-builder-package") {
+      uploadFiles("deb/*.deb",    "ubuntu/", product, fplatform, "Ubuntu")
+      uploadFiles("rpm/**/*.rpm", "centos/", product, fplatform, "CentOS")
+      uploadFiles("tar/*.tar.gz", "linux/",  product, fplatform, "Portable")
+    }
+
+  }
+}
+
+void buildServer(String platform, String edition='community') {
+  String version = "${env.PRODUCT_VERSION}-${env.BUILD_NUMBER}"
+  String product, productName
+
+  switch(edition) {
+    case "community":
+      product = "server_ce"
+      productName = "DocumentServer"
+      break
+    case "enterprise":
+      product = "server_ee"
+      productName = "DocumentServer-EE"
+      break
+    case "developer":
+      product = "server_de"
+      productName = "DocumentServer-DE"
+      break
+  }
+
+  if (platform == "win_64") {
+
+    bat "cd document-server-package && \
+      set \"PRODUCT_NAME=${productName}\" && \
+      make clean && \
+      make packages -e BRANDING_DIR=../r7/document-server-package"
+
+    fplatform = "Windows x64"
+
+    dir ("document-server-package") {
+      uploadFiles("exe/*.exe", "windows/", product, fplatform, "Installer")
+    }
+
+  } else if (platform == "linux_64") {
+
+    sh "cd document-server-package && \
+      export PRODUCT_NAME=${productName.toLowerCase()} && \
+      make clean && \
+      make packages -e BRANDING_DIR=../r7/document-server-package"
+
+    fplatform = "Linux x64"
+
+    dir ("document-server-package") {
+      uploadFiles("deb/*.deb",        "ubuntu/",   product, fplatform, "Ubuntu")
+      uploadFiles("rpm/**/*.rpm",     "centos/",   product, fplatform, "CentOS")
+      uploadFiles("apt-rpm/**/*.rpm", "altlinux/", product, fplatform, "AltLinux")
+      uploadFiles("*.tar.gz",         "linux/",    product, fplatform, "Portable")
+    }
+
+    sh "cd Docker-DocumentServer && \
+      export PRODUCT_NAME=${productName.toLowerCase()} && \
+      export ONLYOFFICE_VALUE=ds && \
+      make clean && \
+      make deploy"
+
+  }
+}
+
+void buildAndroid(String branch = 'master', String config = 'release') {
+  String version = "${env.PRODUCT_VERSION}-${env.BUILD_NUMBER}"
+
+  if (params.wipe) sh "docker image rm -f onlyoffice/android-core-builder"
+
+  dir("android") {
+    sh "mkdir -p workspace && rm -rf workspace/build_tools/out *.zip"
+
+    String runOptions = [
+      "-e BUILD_BRANCH=${branch}",
+      "-e BUILD_CONFIG=${config}",
+      "-v ${pwd()}/workspace:/home/user"
+    ].join(' ')
+    docker.image('onlyoffice/android-core-builder:latest').withRun(runOptions) { c ->
+      sh "docker logs -f ${c.id}"
+    }
+
+    sh "cd workspace/build_tools/out && \
+      zip -r ../../../android-libs-${version}.zip ./android* ./js"
+
+    uploadFiles("*.zip", "android/", "android", "Android", "Libs")
+  }
+}
+
+// Upload
+
+void uploadFiles(String glob, String dest, String product, String platform, String section) {
+  String s3uri, file
+  Closure cmdUpload = { local, remote ->
+    String cmd = "aws s3 cp --acl public-read --no-progress ${local} s3://${remote}"
+    if (platform ==~ /^Windows.*/) bat cmd else sh cmd
+  }
+  Closure cmdMd5sum = {
+    if (platform ==~ /^Windows.*/) {
+      return powershell (
+        script: "Get-FileHash ${it} -Algorithm MD5 | Select -ExpandProperty Hash",
+        returnStdout: true).trim()
+    } else if (platform ==~ /^macOS.*/) {
+      return sh (script: "md5 -qs ${it}", returnStdout: true).trim()
+    } else {
+      return sh (script: "md5sum ${it} | cut -c -32", returnStdout: true).trim()
     }
   }
+
+  findFiles(glob: glob).each {
+    s3uri = "${s3deploy}/${dest}${dest.endsWith('/') ? it.name : ''}"
+    file = dest.endsWith('/') ? it.name : dest.drop(dest.lastIndexOf('/')+1)
+    cmdUpload(it.path, s3uri)
+
+    listDeploy.add([
+      product: product,
+      platform: platform,
+      section: section,
+      path: s3uri,
+      file: file,
+      size: it.length,
+      md5: cmdMd5sum(it.path)
+      // sha256: cmdSha256sum(it.path)
+    ])
+  }
 }
 
-def linuxTest() {
-  checkoutRepo([owner: 'ONLYOFFICE', name: 'doc-builder-testing',
-    dir: 'doc-builder-testing'], 'master')
+// Tests
+
+void linuxTest() {
+  checkoutRepo([owner: 'ONLYOFFICE', name: 'doc-builder-testing'], 'master')
   sh "docker rmi doc-builder-testing || true"
-  sh "cd doc-builder-testing &&\
+  sh "cd doc-builder-testing && \
     docker build --tag doc-builder-testing -f dockerfiles/debian-develop/Dockerfile . &&\
     docker run --rm doc-builder-testing bundle exec parallel_rspec spec -n 2"
 }
 
-def macosBuild(String platform = 'native', String license = 'opensource') {
-  sh "cd build_tools && \
-    ./configure.py ${getConfParams(platform, license)} && \
-    ./make.py"
-}
+// Reports
 
-def macosBuildDesktop(String platform = 'native') {
-  sh "cd build_tools && ./make_packages.py"
+void generateReports() {
+  Map deploy = listDeploy.groupBy { it.product }
 
-  sh """#!/bin/bash -xe
-    cd r7/desktop-apps/macos/build
+  Boolean editors = deploy.editors != null
+  Boolean builder = deploy.builder != null
+  Boolean server_ce = deploy.server_ce != null
+  Boolean server_ee = deploy.server_ee != null
+  Boolean server_de = deploy.server_de != null
+  Boolean android = deploy.android != null
 
-    PACKAGE_NAME="R7-Office"
-    DEPLOY_TITLE="macOS"
+  dir ("html") {
+    sh """
+      rm -fv *.html
+      test -f style.css || wget -nv https://unpkg.com/style.css -O style.css
+    """
 
-    S3_SECTION_DIR="r7-office/\$RELEASE_BRANCH/macos"
-    S3_UPDATES_DIR="\$S3_SECTION_DIR/update/editors_x64/\$PRODUCT_VERSION.\$BUILD_NUMBER"
-    APP_VERSION=\$(mdls -name kMDItemVersion -raw R7-Office.app)
-    DMG="\$PACKAGE_NAME-\$PRODUCT_VERSION-\$BUILD_NUMBER.dmg"
-    ZIP="\$PACKAGE_NAME-\$APP_VERSION.zip"
-    APPCAST="r7-office.xml"
-    CHANGES="\$PACKAGE_NAME-\$APP_VERSION.html"
-
-    aws s3 cp --no-progress --acl public-read \
-      R7-Office.dmg s3://\$S3_BUCKET/\$S3_SECTION_DIR/\$DMG
-
-    aws s3 sync --no-progress --acl public-read \
-      update s3://\$S3_BUCKET/\$S3_UPDATES_DIR
-
-    echo -e "platform,title,path" > deploy.csv
-    echo -e "macos,\$DEPLOY_TITLE DMG,\$S3_SECTION_DIR/\$DMG" >> deploy.csv
-    echo -e "macos,\$DEPLOY_TITLE ZIP,\$S3_UPDATES_DIR/\$ZIP" >> deploy.csv
-    for i in update/*.delta; do
-      DELTA=\$(basename \$i)
-      echo -e "macos,\$DEPLOY_TITLE \$DELTA,\$S3_UPDATES_DIR/\$DELTA" >> deploy.csv
-    done
-    echo -e "macos,\$DEPLOY_TITLE Appcast,\$S3_UPDATES_DIR/\$APPCAST" >> deploy.csv
-    if [[ -f update/\$CHANGES ]]; then
-      echo -e "macos,\$DEPLOY_TITLE Release Notes,\$S3_UPDATES_DIR/\$CHANGES" >> deploy.csv
-    fi
-  """
-
-  def deployData = readCSV file: "r7/desktop-apps/macos/build/deploy.csv", format: CSVFormat.DEFAULT.withHeader()
-  for(item in deployData) {
-    def temp = [ 
-      platform: item.get('platform'),
-      title: item.get('title'),
-      path: item.get('path') ]
-    println temp
-    deployDesktopList.add(temp)
-  }
-}
-
-def windowsBuild(String platform = 'native', String license = 'opensource') {
-  bat "cd build_tools &&\
-    call python configure.py ${getConfParams(platform, license)} &&\
-    call python make.py"
-}
-
-def windowsBuildDesktop (String platform) {
-  bat "cd desktop-apps &&\
-    make clean-package &&\
-    make deploy -e BRANDING_DIR=../r7/desktop-apps"
-
-  def deployData = readJSON file: "desktop-apps/win-linux/package/windows/deploy.json"
-
-  for(item in deployData.items) {
-    println item
-    deployDesktopList.add(item)
-  }
-}
-
-def windowsBuildBuilder(String platform) {
-  bat "cd document-builder-package &&\
-    make clean &&\
-    make deploy -e BRANDING_DIR=../r7/document-builder-package"
-
-  def deployData = readJSON file: "document-builder-package/deploy.json"
-
-  for(item in deployData.items) {
-    println item
-    deployBuilderList.add(item)
-  }
-}
-
-def windowsBuildServer(String platform = 'native', String productName='DocumentServer') {
-  bat "cd document-server-package && \
-    set \"PRODUCT_NAME=${productName}\" && \
-    make clean && \
-    make deploy -e BRANDING_DIR=../r7/document-server-package"
-
-  def deployData = readJSON file: "document-server-package/deploy.json"
-
-  for(item in deployData.items) {
-    println item
-    switch(productName) {
-      case 'DocumentServer':
-        deployServerCeList.add(item)
-        break
-      case 'DocumentServer-EE':
-        deployServerEeList.add(item)
-        break
-      case 'DocumentServer-DE':
-        deployServerDeList.add(item)
-        break
+    if (editors)
+      publishReport("DesktopEditors", ["editors.html": deploy.editors])
+    if (builder)
+      publishReport("DocumentBuilder", ["builder.html": deploy.builder])
+    if (server_ce || server_ee || server_de) {
+      Map serverReports = [:]
+      if (server_ce) serverReports."server_ce.html" = deploy.server_ce
+      if (server_ee) serverReports."server_ee.html" = deploy.server_ee
+      if (server_de) serverReports."server_de.html" = deploy.server_de
+      publishReport("DocumentServer", serverReports)
     }
+    if (android)
+      publishReport("Android", ["android.html": deploy.android])
   }
 }
 
-def androidBuild(String branch = 'master', String config = 'release') {
-  if (params.wipe) {
-    sh "docker image rm -f onlyoffice/android-core-builder"
+void publishReport(String title, Map files) {
+  files.each {
+    writeFile file: it.key, text: getHtml(it.value)
   }
-
-  sh """#!/bin/bash -xe
-    [[ ! -d android/workspace ]] && mkdir -p android/workspace
-    cd android
-
-    rm -rf \
-      workspace/build_tools/out \
-      index.html \
-      *.zip
-  """
-
-  def dockerRunOptions = []
-  dockerRunOptions.add("-e BUILD_BRANCH=${branch}")
-  dockerRunOptions.add("-e BUILD_CONFIG=${config}")
-  dockerRunOptions.add("-v ${env.WORKSPACE}/android/workspace:/home/user")
-
-  docker.image('onlyoffice/android-core-builder:latest').withRun(dockerRunOptions.join(' ')) { c ->
-    sh "docker logs -f ${c.id}"
-  }
-
-  String androidLibsFile = "android-libs-${env.PRODUCT_VERSION}-${env.BUILD_NUMBER}.zip"
-  String androidLibsUri = "onlyoffice/${env.RELEASE_BRANCH}/android/${androidLibsFile}"
-
-  sh """#!/bin/bash -xe
-    cd android
-    pushd workspace/build_tools/out
-    zip -r ../../../${androidLibsFile} ./android* ./js
-    popd
-
-    aws s3 cp --no-progress --acl public-read \
-      ${androidLibsFile} s3://\$S3_BUCKET/${androidLibsUri}
-  """
-
-  def deployData = [ platform: 'android', title: 'Android libs', path: androidLibsUri ]
-
-  println deployData
-  deployAndroidList.add(deployData)
+  publishHTML([
+    allowMissing: false,
+    alwaysLinkToLastBuild: false,
+    includes: files.collect({ it.key }).join(',') + ",*.css",
+    keepAll: true,
+    reportDir: '',
+    reportFiles: files.collect({ it.key }).join(','),
+    reportName: title,
+    reportTitles: ''
+  ])
 }
 
-def deployCore(String platform) {
-  String dirRepo, platformType, version
-
-  switch(platform) {
-    case 'linux_64':
-      dirRepo = 'linux'
-      platformType = 'x64'
-      version = PRODUCT_VERSION + '-' + BUILD_NUMBER
-      break
-    case 'mac_64':
-      dirRepo = 'mac'
-      platformType = 'x64'
-      version = PRODUCT_VERSION + '-' + BUILD_NUMBER
-      break
-    case 'win_64':
-      dirRepo = 'windows'
-      platformType = 'x64'
-      version = PRODUCT_VERSION + '.' + BUILD_NUMBER
-      break
-    case 'win_32':
-      dirRepo = 'windows'
-      platformType = 'x86'
-      version = PRODUCT_VERSION + '.' + BUILD_NUMBER
-      break
+def getHtml(ArrayList data) {
+  String text, url
+  Closure size = {
+    return sh (script: "LANG=C numfmt --to=iec-i ${it}", returnStdout: true).trim()
   }
 
-  String pathCore = "build_tools/out/${platform}/onlyoffice/core/core.7z"
-  String dirS3CoreV = "${dirRepo}/core/${BRANCH_NAME}/${version}/${platformType}"
-  String dirS3CoreL = "${dirRepo}/core/${BRANCH_NAME}/latest/${platformType}"
-  String label = 'Deploy Core to S3'
-  String script = """
-    aws s3 cp --acl public-read --no-progress \
-      ${pathCore} \
-      s3://${S3_BUCKET}/${dirS3CoreV}/
-    aws s3 sync --acl public-read --delete --no-progress \
-      s3://${S3_BUCKET}/${dirS3CoreV}/ \
-      s3://${S3_BUCKET}/${dirS3CoreL}/
-  """
-
-  switch(platform) {
-    case ['linux_64', 'mac_64']: sh  label: label, script: script; break
-    case ['win_64', 'win_32']:   bat label: label, script: script; break
+  text = "<html>\n<head>" \
+    + "\n  <link rel=\"stylesheet\" href=\"style.css\">" \
+    + "\n  <style type=\"text/css\">body { margin: 24px; }</style>" \
+    + "\n<head>\n<body>"
+  data.groupBy { it.platform }.each { platform, sections ->
+    text += "\n  <h3>${platform}</h3>\n  <ul>"
+    sections.groupBy { it.section }.each { section, files ->
+      text += "\n    <li><b>${section}</b></li>\n    <ul>"
+      files.each {
+        url = "https://s3.${s3region}.amazonaws.com/${it.path}"
+        text += "\n      <li>" \
+          + "\n        <a href=\"${url}\">${it.file}</a>" \
+          + ", Size: ${size(it.size)}B" \
+          + ", MD5: <code>${it.md5}</code>" \
+          + "\n      </li>"
+      }
+      text += "\n    </ul>"
+    }
+    text += "\n  </ul>"
   }
+  text += "\n</body>\n</html>"
+
+  return text
 }
 
-def createReports() {
-  Boolean desktop = !deployDesktopList.isEmpty()
-  Boolean builder = !deployBuilderList.isEmpty()
-  Boolean serverc = !deployServerCeList.isEmpty()
-  Boolean servere = !deployServerEeList.isEmpty() 
-  Boolean serverd = !deployServerDeList.isEmpty()
-  Boolean android = !deployAndroidList.isEmpty()
-
-  dir ('html') {
-    deleteDir()
-
-    sh "wget -nv https://unpkg.com/style.css -O style.css"
-    sh "echo \"body { margin: 16px; }\" > custom.css"
-
-    if (desktop) { writeFile file: 'desktopeditors.html', text: genHtml(deployDesktopList) }
-    if (builder) { writeFile file: 'documentbuilder.html', text: genHtml(deployBuilderList) }
-    if (serverc) { writeFile file: 'documentserver_ce.html', text: genHtml(deployServerCeList) }
-    if (servere) { writeFile file: 'documentserver_ee.html', text: genHtml(deployServerEeList) }
-    if (serverd) { writeFile file: 'documentserver_de.html', text: genHtml(deployServerDeList) }
-    if (android) { writeFile file: 'android.html', text: genHtml(deployAndroidList) }
-  }
-
-  if (desktop) {
-    publishHTML([
-      allowMissing: false,
-      alwaysLinkToLastBuild: false,
-      includes: 'desktopeditors.html,*.css',
-      keepAll: true,
-      reportDir: 'html',
-      reportFiles: 'desktopeditors.html',
-      reportName: "DesktopEditors",
-      reportTitles: ''
-    ])
-  }
-  
-  if (builder) {
-    publishHTML([
-      allowMissing: false,
-      alwaysLinkToLastBuild: false,
-      includes: 'documentbuilder.html,*.css',
-      keepAll: true,
-      reportDir: 'html',
-      reportFiles: 'documentbuilder.html',
-      reportName: "DocumentBuilder",
-      reportTitles: ''
-    ])
-  }
-
-  if (serverc || servere || serverd) {
-    // compatibility for htmlpublisher-1.18
-    def serverIndexFiles = []
-    if (serverc) { serverIndexFiles.add('documentserver_ce.html') }
-    if (servere) { serverIndexFiles.add('documentserver_ee.html') }
-    if (serverd) { serverIndexFiles.add('documentserver_de.html') }
-
-    publishHTML([
-      allowMissing: false,
-      alwaysLinkToLastBuild: false,
-      includes: 'documentserver_*.html,*.css',
-      keepAll: true,
-      reportDir: 'html',
-      reportFiles: serverIndexFiles.join(','),
-      reportName: "DocumentServer",
-      reportTitles: ''
-    ])
-  }
-
-  if (android) {
-    publishHTML([
-      allowMissing: false,
-      alwaysLinkToLastBuild: false,
-      includes: 'android.html,*.css',
-      keepAll: true,
-      reportDir: 'html',
-      reportFiles: 'android.html',
-      reportName: "Android",
-      reportTitles: ''
-    ])
-  }
-}
-
-def genHtml(ArrayList deployList) {
-  String url = ''
-  String html = """\
-    |<html>
-    |<head>
-    |  <link rel="stylesheet" href="style.css">
-    |  <link rel="stylesheet" href="custom.css">
-    |<head>
-    |<body>
-    |  <dl>
-    |""".stripMargin()
-
-  for(p in deployList) {
-    url = "https://${env.S3_BUCKET}.s3-eu-west-1.amazonaws.com/${p.path}"
-    html += """\
-      |    <dt>${p.title}</dt>
-      |    <dd><a href="${url}">${url}</a></dd>
-      |""".stripMargin()
-  }
-
-  html += """\
-    |  </dl>
-    |</body>
-    |</html>
-    |""".stripMargin()
-
-  return html
-}
-
-def setStageStats(String stageStatus) {
-  if (stageStats."${STAGE_NAME}" == null) {
-    stageStats."${STAGE_NAME}" = stageStatus
-  }
-}
+// Notifications
 
 def getJobStats(String jobStatus) {
   String text = "Build [${currentBuild.fullDisplayName}]" \
     + "(${currentBuild.absoluteUrl}) ${jobStatus}"
-  String icon
   stageStats.each { stage, status ->
-    switch(status) {
-      case 'fixed':   icon = '🟢'; break
-      case 'failure': icon = '🔴'; break
-      case 'success': icon = '🔵'; break
-    }
-    text += "\n${icon} ${stage}"
+    text += "\n${status ? '🔵' : '🔴'} ${stage}"
   }
   return text
 }
 
-def sendTelegramMessage(String text, String chatId, Boolean markdown = true) {
+void sendTelegramMessage(String text, String chatId, Boolean markdown = true) {
   sh label: "Send Telegram Message", script: "curl -X POST -s -S \
-    ${markdown ? '-d parse_mode=markdown' : ''} \
     -d chat_id=${chatId} \
+    ${markdown ? '-d parse_mode=markdown' : ''} \
+    -d disable_web_page_preview=true \
     --data-urlencode text='${text}' \
     https://api.telegram.org/bot\$TELEGRAM_TOKEN/sendMessage"
 }
