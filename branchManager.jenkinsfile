@@ -71,7 +71,7 @@ pipeline {
           String branch = BRANCH_NAME
           ArrayList baseBranches = []
           getRepos().each {
-            stats.repos.put(it.owner + '/' + it.name, [:])
+            stats.repos.put(it, [:])
           }
           Boolean pAction
           Boolean sAction
