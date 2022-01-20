@@ -20,7 +20,7 @@ defaults = [
   password:      true,
   beta:          false,
   test:          false,
-  sign:          false,
+  sign:          true,
   schedule:      'H 17 * * *'
 ]
 
