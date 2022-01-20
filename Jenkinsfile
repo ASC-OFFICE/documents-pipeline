@@ -52,10 +52,12 @@ pipeline {
     SUPPORT_URL = "http://support.r7-office.ru"
     SUPPORT_MAIL = "support@r7-office.ru"
     TELEGRAM_TOKEN = credentials('telegram-bot-token')
+    CODESIGN_CERT_PWD = credentials('codesign-cert-pwd')
     S3_BUCKET = "repo-doc-onlyoffice-com"
   }
   options {
     buildDiscarder logRotator(daysToKeepStr: '90', artifactDaysToKeepStr: '30')
+    overrideIndexTriggers false
   }
   parameters {
     booleanParam (
@@ -93,6 +95,11 @@ pipeline {
       description:  'Build Windows x64 targets',
       defaultValue: defaults.windows_64
     )
+    // booleanParam (
+    //   name:         'win_64_vs19',
+    //   description:  'Build Windows x64 targets (Visual Studio 2019)',
+    //   defaultValue: defaults.windows_64
+    // )
     booleanParam (
       name:         'win_32',
       description:  'Build Windows x86 targets',
@@ -396,6 +403,52 @@ pipeline {
             }
           }
         }
+
+        /*stage('Windows x64 (VS19)') {
+          agent {
+            node {
+              label 'win_64_vs19'
+              customWorkspace "C:\\oo\\${env.BRANCH_NAME}\\win_64"
+            }
+          }
+          when {
+            expression { params.win_64_vs19 }
+            beforeAgent true
+          }
+          environment {
+            USE_VS19 = '1'
+          }
+          steps {
+            script {
+              stageStats."${STAGE_NAME}" = false
+
+              if (params.wipe)
+                deleteDir()
+              else if (params.clean && params.desktop)
+                dir ('desktop-apps') { deleteDir() }
+
+              String platform = "win_64"
+              ArrayList varRepos = getVarRepos(platform, env.BRANCH_NAME)
+              checkoutRepos(varRepos)
+
+              if (params.core || params.builder || params.server_ce) {
+                build(platform)
+                if (params.builder)   buildBuilder(platform)
+                if (params.server_ce) buildServer(platform)
+              }
+
+              if (params.desktop || params.server_ee || params.server_de) {
+                build(platform, "commercial")
+                if (params.desktop)   buildDesktop(platform)
+                if (params.server_ee) buildServer(platform, "enterprise")
+                if (params.server_de) buildServer(platform, "developer")
+              }
+
+              stageStats."${STAGE_NAME}" = true
+            }
+          }
+        }*/
+
         stage('Windows x86') {
           agent {
             node {
@@ -616,7 +669,7 @@ def getVarRepos(String platform, String branch = 'master') {
   }
 
   ArrayList repos = []
-  reposOutput.readLines().each { line ->
+  reposOutput.readLines().sort().each { line ->
     ArrayList lineSplit = line.split(" ")
     Map repo = [
       owner: "ONLYOFFICE",
@@ -693,7 +746,6 @@ def getConfigArgs(String platform = 'native', String license = 'opensource') {
   args.add("--qt-dir ${env.QT_PATH}")
   if (platform.endsWith("_xp"))
     args.add("--qt-dir-xp ${env.QT56_PATH}")
-  // if (license == "commercial")
   args.add("--branding \"r7\"")
   if (platform.startsWith("mac"))
     args.add("--compiler \"clang\"")
@@ -729,7 +781,6 @@ void build(String platform, String license = 'opensource') {
 
   }
 
-  // if (license == "opensource") {
   if (false) {
     String os, arch, version
     String branch = env.BRANCH_NAME
@@ -768,7 +819,7 @@ void build(String platform, String license = 'opensource') {
 void buildDesktop (String platform) {
   String version = "${env.PRODUCT_VERSION}-${env.BUILD_NUMBER}"
   String product = "desktop"
-  String buildPackage, fplatform, scheme, macosDeployPath
+  String buildPackage, fplatform, winDeployPath, macosDeployPath, scheme
 
   if (platform.startsWith("win")) {
 
@@ -792,17 +843,17 @@ void buildDesktop (String platform) {
       buildPackage = "diskimage-v8-x86_64"
       fplatform = "macOS x86-64 V8 (legacy)"
       scheme = "R7-Office-v8"
-      macosDeployPath = "v8"
+      macosDeployPath = "macos/${version}/v8/"
     } else if (platform == "mac_64") {
       buildPackage = "diskimage-x86_64"
       fplatform = "macOS x86-64"
       scheme = "R7-Office-x86_64"
-      macosDeployPath = "x86_64"
+      macosDeployPath = "macos/${version}/x86_64/"
     } else if (platform == "mac_arm64") {
       buildPackage = "diskimage-arm64"
       fplatform = "macOS ARM64"
       scheme = "R7-Office-arm"
-      macosDeployPath = "arm"
+      macosDeployPath = "macos/${version}/arm/"
     }
 
     sh "rm -rfv \
@@ -817,9 +868,13 @@ void buildDesktop (String platform) {
       returnStdout: true).trim()
 
     dir ("r7/desktop-apps/macos/build") {
-      uploadFiles("*.dmg", "macos/${macosDeployPath}/${version}/", product, fplatform, "Disk Image")
+      uploadFiles("*.dmg", macosDeployPath, product, fplatform, "Disk Image")
       uploadFiles("${scheme}-*.zip,update/*.delta,update/*.xml,update/*.html",
-        "macos/${macosDeployPath}/${version}/", product, fplatform, "Sparkle")
+        macosDeployPath, product, fplatform, "Sparkle")
+    dir ("desktop-apps/macos/build") {
+      uploadFiles("*.dmg", macosDeployPath, product, fplatform, "Disk Image")
+      uploadFiles("${scheme}-*.zip,update/*.delta,update/*.xml,update/*.html",
+        macosDeployPath, product, fplatform, "Sparkle")
     }
 
   } else if (platform == "linux_64") {
@@ -845,7 +900,7 @@ void buildDesktop (String platform) {
 void buildBuilder(String platform) {
   String version = "${env.PRODUCT_VERSION}-${env.BUILD_NUMBER}"
   String product = "builder"
-  String fplatform
+  String fplatform, winDeployPath
 
   if (platform.startsWith("win")) {
 
@@ -855,10 +910,11 @@ void buildBuilder(String platform) {
 
     if (platform.startsWith("win_64")) fplatform = "Windows x64" else
     if (platform.startsWith("win_32")) fplatform = "Windows x86"
+    winDeployPath = "windows/${version}/builder/"
 
     dir ("document-builder-package") {
-      uploadFiles("exe/*.exe", "windows/", product, fplatform, "Installer")
-      uploadFiles("zip/*.zip", "windows/", product, fplatform, "Portable")
+      uploadFiles("exe/*.exe", winDeployPath, product, fplatform, "Installer")
+      uploadFiles("zip/*.zip", winDeployPath, product, fplatform, "Portable")
     }
 
   } else if (platform == "linux_64") {
@@ -880,7 +936,7 @@ void buildBuilder(String platform) {
 
 void buildServer(String platform, String edition='community') {
   String version = "${env.PRODUCT_VERSION}-${env.BUILD_NUMBER}"
-  String product, productName
+  String product, productName, winDeployPath
 
   switch(edition) {
     case "community":
@@ -905,9 +961,10 @@ void buildServer(String platform, String edition='community') {
       make packages -e BRANDING_DIR=../r7/document-server-package"
 
     fplatform = "Windows x64"
+    winDeployPath = "windows/${version}/server/"
 
     dir ("document-server-package") {
-      uploadFiles("exe/*.exe", "windows/", product, fplatform, "Installer")
+      uploadFiles("exe/*.exe", winDeployPath, product, fplatform, "Installer")
     }
 
   } else if (platform == "linux_64") {
@@ -1067,7 +1124,7 @@ def getHtml(ArrayList data) {
     + "\n  <link rel=\"stylesheet\" href=\"style.css\">" \
     + "\n  <style type=\"text/css\">body { margin: 24px; }</style>" \
     + "\n<head>\n<body>"
-  data.groupBy { it.platform }.each { platform, sections ->
+  data.groupBy { it.platform }.sort().each { platform, sections ->
     text += "\n  <h3>${platform}</h3>\n  <ul>"
     sections.groupBy { it.section }.each { section, files ->
       text += "\n    <li><b>${section}</b></li>\n    <ul>"
