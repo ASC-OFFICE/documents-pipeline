@@ -617,21 +617,24 @@ pipeline {
 
 void checkoutRepo(String repo, String branch = 'master', String dir = repo.minus(~/^.+\//)) {
   if (dir == null) dir = repo.minus(~/^.+\//)
-  checkout([
-    $class: 'GitSCM',
-    branches: [[name: 'refs/heads/' + branch]],
-    doGenerateSubmoduleConfigurations: false,
-    extensions: [
-      [$class: 'SubmoduleOption', recursiveSubmodules: true],
-      [$class: 'RelativeTargetDirectory', relativeTargetDir: dir],
-      [$class: 'ScmName', name: "${repo}"]
-    ],
-    submoduleCfg: [],
-    userRemoteConfigs: [[url: "git@github.com:${repo}.git"]]
-  ])
+  def retryCount = 0
+  retry(3) {
+    if (retryCount > 0) sleep(30)
+    checkout([
+      $class: 'GitSCM',
+      branches: [[name: 'refs/heads/' + branch]],
+      doGenerateSubmoduleConfigurations: false,
+      extensions: [
+        [$class: 'SubmoduleOption', recursiveSubmodules: true],
+        [$class: 'RelativeTargetDirectory', relativeTargetDir: dir],
+        [$class: 'ScmName', name: "${repo}"]
+      ],
+      submoduleCfg: [],
+      userRemoteConfigs: [[url: "git@github.com:${repo}.git"]]
+    ])
+    retryCount++
+  }
 }
-
-return this
 
 def getConstRepos(String branch = 'master') {
   return [
@@ -827,14 +830,21 @@ void buildDesktop (String platform) {
       make clean-package && \
       make packages -e BRANDING_DIR=../r7/desktop-apps"
 
-    if (platform.startsWith("win_64")) fplatform = "Windows x64" else
-    if (platform.startsWith("win_32")) fplatform = "Windows x86"
+    if (platform.startsWith("win_64") && (env.USE_VS19 == '1')) fplatform = "Windows x64 (VS19)"
+    else if (platform.startsWith("win_64")) fplatform = "Windows x64"
+    else if (platform.startsWith("win_32")) fplatform = "Windows x86"
+    if (env.USE_VS19 != "1") {
+      winDeployPath = "windows/${version}/desktop/"
+    } else {
+      winDeployPath = "windows/${version}/desktop-vs19/"
+    }
 
     dir ("desktop-apps/win-linux/package/windows") {
-      uploadFiles("*.exe", "windows/", product, fplatform, "Installer")
-      uploadFiles("*.zip", "windows/", product, fplatform, "Portable")
+      uploadFiles("*.exe", winDeployPath, product, fplatform, "Installer")
+      uploadFiles("*.msi", winDeployPath, product, fplatform, "Installer")
+      uploadFiles("*.zip", winDeployPath, product, fplatform, "Portable")
       uploadFiles("update/*.exe,update/*.xml,update/*.html",
-        "windows/editors/${version}/", product, fplatform, "WinSparkle")
+        winDeployPath, product, fplatform, "WinSparkle")
     }
 
   } else if (platform.startsWith("mac")) {
@@ -887,7 +897,7 @@ void buildDesktop (String platform) {
       uploadFiles("apt-rpm/**/*.rpm", "altlinux/", product, fplatform, "AltLinux")
       uploadFiles("urpmi/**/*.rpm",   "rosa/",     product, fplatform, "Rosa")
       uploadFiles("tar/**/*.tar.gz",  "linux/",    product, fplatform, "Portable")
-      uploadFiles("deb-astra/*.deb", "astralinux/", product, fplatform, "AstraLinux Signed")
+      uploadFiles("deb-astra/*.deb",  "astralinux/", product, fplatform, "AstraLinux Signed")
     }
 
   }
@@ -904,9 +914,14 @@ void buildBuilder(String platform) {
       make clean && \
       make packages -e BRANDING_DIR=../r7/document-builder-package"
 
-    if (platform.startsWith("win_64")) fplatform = "Windows x64" else
-    if (platform.startsWith("win_32")) fplatform = "Windows x86"
-    winDeployPath = "windows/${version}/builder/"
+    if (platform.startsWith("win_64") && (env.USE_VS19 == '1')) fplatform = "Windows x64 (VS19)" else
+    if (platform.startsWith("win_64")) fplatform = "Windows x64"
+    else if (platform.startsWith("win_32")) fplatform = "Windows x86"
+    if (env.USE_VS19 != "1") {
+      winDeployPath = "windows/${version}/builder/"
+    } else {
+      winDeployPath = "windows/${version}/builder-vs19/"
+    }
 
     dir ("document-builder-package") {
       uploadFiles("exe/*.exe", winDeployPath, product, fplatform, "Installer")
@@ -956,8 +971,13 @@ void buildServer(String platform, String edition='community') {
       make clean && \
       make packages -e BRANDING_DIR=../r7/document-server-package"
 
-    fplatform = "Windows x64"
-    winDeployPath = "windows/${version}/server/"
+    if (env.USE_VS19 != "1") {
+      fplatform = "Windows x64"
+      winDeployPath = "windows/${version}/server/"
+    } else {
+      fplatform = "Windows x64 (VS19)"
+      winDeployPath = "windows/${version}/server-vs19/"
+    }
 
     dir ("document-server-package") {
       uploadFiles("exe/*.exe", winDeployPath, product, fplatform, "Installer")
