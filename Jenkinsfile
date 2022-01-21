@@ -52,7 +52,6 @@ pipeline {
     SUPPORT_URL = "http://support.r7-office.ru"
     SUPPORT_MAIL = "support@r7-office.ru"
     TELEGRAM_TOKEN = credentials('telegram-bot-token')
-    CODESIGN_CERT_PWD = credentials('codesign-cert-pwd')
     S3_BUCKET = "repo-doc-onlyoffice-com"
   }
   options {
