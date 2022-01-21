@@ -871,10 +871,6 @@ void buildDesktop (String platform) {
       uploadFiles("*.dmg", macosDeployPath, product, fplatform, "Disk Image")
       uploadFiles("${scheme}-*.zip,update/*.delta,update/*.xml,update/*.html",
         macosDeployPath, product, fplatform, "Sparkle")
-    dir ("desktop-apps/macos/build") {
-      uploadFiles("*.dmg", macosDeployPath, product, fplatform, "Disk Image")
-      uploadFiles("${scheme}-*.zip,update/*.delta,update/*.xml,update/*.html",
-        macosDeployPath, product, fplatform, "Sparkle")
     }
 
   } else if (platform == "linux_64") {
