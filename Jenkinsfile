@@ -47,7 +47,7 @@ pipeline {
     COMPANY_NAME = "R7-Office"
     RELEASE_BRANCH = "${defaults.branch}"
     PRODUCT_VERSION = "${defaults.version}"
-    PUBLISHER_NAME = "AO \"NOVYE KOMMUNIKACIONNYE TEHNOLOGII\""
+    PUBLISHER_NAME = 'AO "R7"'
     PUBLISHER_URL = "http://r7-office.ru"
     SUPPORT_URL = "http://support.r7-office.ru"
     SUPPORT_MAIL = "support@r7-office.ru"
