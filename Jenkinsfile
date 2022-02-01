@@ -251,7 +251,7 @@ pipeline {
         stage('macOS x64') {
           agent { label 'macos_64' }
           environment {
-            FASTLANE_DISABLE_COLORS = '1'
+            FASTLANE_HIDE_TIMESTAMP = '1'
             FASTLANE_SKIP_UPDATE_CHECK = '1'
             APPLE_ID = credentials('macos-apple-id')
             TEAM_ID = credentials('macos-team-id')
@@ -290,7 +290,7 @@ pipeline {
         stage('macOS x64 V8') {
           agent { label 'macos_64_v8' }
           environment {
-            FASTLANE_DISABLE_COLORS = '1'
+            FASTLANE_HIDE_TIMESTAMP = '1'
             FASTLANE_SKIP_UPDATE_CHECK = '1'
             APPLE_ID = credentials('macos-apple-id')
             TEAM_ID = credentials('macos-team-id')
@@ -327,7 +327,7 @@ pipeline {
         stage('macOS ARM64') {
           agent { label 'macos_arm64' }
           environment {
-            FASTLANE_DISABLE_COLORS = '1'
+            FASTLANE_HIDE_TIMESTAMP = '1'
             FASTLANE_SKIP_UPDATE_CHECK = '1'
             APPLE_ID = credentials('macos-apple-id')
             TEAM_ID = credentials('macos-team-id')
@@ -822,12 +822,27 @@ void buildDesktop (String platform) {
   String version = "${env.PRODUCT_VERSION}-${env.BUILD_NUMBER}"
   String product = "desktop"
   String buildPackage, fplatform, winDeployPath, macosDeployPath, scheme
+  ArrayList targets = ['clean']
 
   if (platform.startsWith("win")) {
 
-    bat "cd desktop-apps && \
-      make clean-package && \
-      make packages -e BRANDING_DIR=../r7/desktop-apps"
+    if (platform == 'win_64') {
+      targets += ['innosetup-x64', 'winsparkle-update', 'winsparkle-files', 'advinst-x64', 'portable-x64']
+    } else if (platform == 'win_32') {
+      targets += ['innosetup-x86', 'winsparkle-update', 'advinst-x86', 'portable-x86']
+    } else if (platform == 'win_64_xp') {
+      targets += ['innosetup-x64-xp', 'winsparkle-update', 'portable-x64-xp']      
+    } else if (platform == 'win_32_xp') {
+      targets += ['innosetup-x86-xp', 'winsparkle-update', 'portable-x86-xp']
+    }
+    if (params.signing) targets += ['sign']
+
+    bat "cd build_tools && python make_package.py" + \
+      " --product desktop" + \
+      " --branding r7" + \
+      " --version ${env.PRODUCT_VERSION}" + \
+      " --build ${env.BUILD_NUMBER}" + \
+      " --targets clean ${targets.join(' ')}"
 
     if (platform.startsWith("win_64") && (env.USE_VS19 == '1')) fplatform = "Windows x64 (VS19)"
     else if (platform.startsWith("win_64")) fplatform = "Windows x64"
