@@ -837,12 +837,12 @@ void buildDesktop (String platform) {
     }
     if (params.signing) targets += ['sign']
 
-    bat "cd build_tools && python make_package.py" + \
+    bat "cd build_tools && call python make_package.py" + \
       " --product desktop" + \
       " --branding r7" + \
       " --version ${env.PRODUCT_VERSION}" + \
       " --build ${env.BUILD_NUMBER}" + \
-      " --targets clean ${targets.join(' ')}"
+      " --targets ${targets.join(' ')}"
 
     if (platform.startsWith("win_64") && (env.USE_VS19 == '1')) fplatform = "Windows x64 (VS19)"
     else if (platform.startsWith("win_64")) fplatform = "Windows x64"
@@ -921,12 +921,19 @@ void buildBuilder(String platform) {
   String version = "${env.PRODUCT_VERSION}-${env.BUILD_NUMBER}"
   String product = "builder"
   String fplatform, winDeployPath
+  ArrayList targets = ['clean']
 
   if (platform.startsWith("win")) {
 
-    bat "cd document-builder-package && \
-      make clean && \
-      make packages -e BRANDING_DIR=../r7/document-builder-package"
+    if (platform == 'win_64') targets += ['innosetup-x64', 'portable-x64']
+    if (params.signing) targets += ['sign']
+
+    bat "cd build_tools && call python make_package.py" + \
+      " --product builder" + \
+      " --branding r7" + \
+      " --version ${env.PRODUCT_VERSION}" + \
+      " --build ${env.BUILD_NUMBER}" + \
+      " --targets ${targets.join(' ')}"
 
     if (platform.startsWith("win_64") && (env.USE_VS19 == '1')) fplatform = "Windows x64 (VS19)" else
     if (platform.startsWith("win_64")) fplatform = "Windows x64"
