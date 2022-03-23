@@ -55,7 +55,7 @@ pipeline {
     S3_BUCKET = "repo-doc-onlyoffice-com"
   }
   options {
-    buildDiscarder logRotator(daysToKeepStr: '90', artifactDaysToKeepStr: '30')
+    buildDiscarder logRotator(daysToKeepStr: '30', artifactDaysToKeepStr: '30')
     overrideIndexTriggers false
   }
   parameters {
@@ -94,11 +94,6 @@ pipeline {
       description:  'Build Windows x64 targets',
       defaultValue: defaults.windows_64
     )
-    // booleanParam (
-    //   name:         'win_64_vs19',
-    //   description:  'Build Windows x64 targets (Visual Studio 2019)',
-    //   defaultValue: defaults.windows_64
-    // )
     booleanParam (
       name:         'win_32',
       description:  'Build Windows x86 targets',
@@ -402,52 +397,6 @@ pipeline {
             }
           }
         }
-
-        /*stage('Windows x64 (VS19)') {
-          agent {
-            node {
-              label 'win_64_vs19'
-              customWorkspace "C:\\oo\\${env.BRANCH_NAME}\\win_64"
-            }
-          }
-          when {
-            expression { params.win_64_vs19 }
-            beforeAgent true
-          }
-          environment {
-            USE_VS19 = '1'
-          }
-          steps {
-            script {
-              stageStats."${STAGE_NAME}" = false
-
-              if (params.wipe)
-                deleteDir()
-              else if (params.clean && params.desktop)
-                dir ('desktop-apps') { deleteDir() }
-
-              String platform = "win_64"
-              ArrayList varRepos = getVarRepos(platform, env.BRANCH_NAME)
-              checkoutRepos(varRepos)
-
-              if (params.core || params.builder || params.server_ce) {
-                build(platform)
-                if (params.builder)   buildBuilder(platform)
-                if (params.server_ce) buildServer(platform)
-              }
-
-              if (params.desktop || params.server_ee || params.server_de) {
-                build(platform, "commercial")
-                if (params.desktop)   buildDesktop(platform)
-                if (params.server_ee) buildServer(platform, "enterprise")
-                if (params.server_de) buildServer(platform, "developer")
-              }
-
-              stageStats."${STAGE_NAME}" = true
-            }
-          }
-        }*/
-
         stage('Windows x86') {
           agent {
             node {
@@ -852,17 +801,17 @@ void buildDesktop (String platform) {
       buildPackage = "diskimage-v8-x86_64"
       fplatform = "macOS x86-64 V8 (legacy)"
       scheme = "R7-Office-v8"
-      macosDeployPath = "macos/${version}/v8/"
+      macosDeployPath = "v8"
     } else if (platform == "mac_64") {
       buildPackage = "diskimage-x86_64"
       fplatform = "macOS x86-64"
       scheme = "R7-Office-x86_64"
-      macosDeployPath = "macos/${version}/x86_64/"
+      macosDeployPath = "x86_64"
     } else if (platform == "mac_arm64") {
       buildPackage = "diskimage-arm64"
       fplatform = "macOS ARM64"
       scheme = "R7-Office-arm"
-      macosDeployPath = "macos/${version}/arm/"
+      macosDeployPath = "arm"
     }
 
     sh "rm -rfv \
@@ -871,15 +820,15 @@ void buildDesktop (String platform) {
     sh "cd build_tools && \
       ./make_packages.py --product desktop --package ${buildPackage} --branding r7"
 
-    String appVersion = sh (
-      script: "/usr/libexec/PlistBuddy -c 'print :CFBundleShortVersionString' \
-        r7/desktop-apps/macos/build/R7-Office.app/Contents/Info.plist",
-      returnStdout: true).trim()
+    // String appVersion = sh (
+    //   script: "/usr/libexec/PlistBuddy -c 'print :CFBundleShortVersionString' \
+    //     r7/desktop-apps/macos/build/R7-Office.app/Contents/Info.plist",
+    //   returnStdout: true).trim()
 
     dir ("r7/desktop-apps/macos/build") {
-      uploadFiles("*.dmg", macosDeployPath, product, fplatform, "Disk Image")
+      uploadFiles("*.dmg", "macos/${macosDeployPath}/${version}/", product, fplatform, "Disk Image")
       uploadFiles("${scheme}-*.zip,update/*.delta,update/*.xml,update/*.html",
-        macosDeployPath, product, fplatform, "Sparkle")
+        "macos/${macosDeployPath}/${version}/", product, fplatform, "Sparkle")
     }
 
   } else if (platform == "linux_64") {
