@@ -387,7 +387,7 @@ def sendNotification() {
     switch(status.primary) {
       case 'skip':    text += '🔘'; break
       case 'success': text += '☑️'; break
-      case 'failure': text += '🛑'; break
+      case 'failure': text += '🚫'; break
       default:        text += '➖'
     }
     switch(status.secondary) {
