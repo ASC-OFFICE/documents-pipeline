@@ -908,7 +908,7 @@ void buildDesktop(String platform) {
         [section: "Sparkle",
          glob: "${scheme}-*.zip,update/*.delta,update/*.xml,update/*.html",
          dest: "/"],
-      ], "desktop-apps/macos/build", "${s3prefix}/macos/${version}/${suffix}")
+      ], "r7/desktop-apps/macos/build", "${s3prefix}/macos/${version}/${suffix}")
 
   } else if (platform ==~ /^linux.*/) {
 
