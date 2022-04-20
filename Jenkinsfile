@@ -803,7 +803,7 @@ def getConfigArgs(String platform = 'native', String license = 'opensource') {
   args.add("--update false")
   args.add("--clean ${params.clean.toString()}")
   args.add("--qt-dir ${env.QT_PATH}")
-  if (platform.endsWith("_xp"))
+  if (platform in ["win_64_xp", "win_32_xp"])
     args.add("--qt-dir-xp ${env.QT56_PATH}")
   if (license == "commercial")
     args.add("--branding ${branding.repo}")
@@ -996,10 +996,13 @@ void buildServer(String platform, String edition='community') {
 
   if (platform ==~ /^windows.*/) {
 
+    makeargs = "-e PRODUCT_NAME=${productName}"
+    if (!branding.onlyoffice)
+      makeargs += " -e BRANDING_DIR=../${branding.repo}/document-server-package"
+
     bat "cd document-server-package && \
-      set \"PRODUCT_NAME=${productName}\" && \
       make clean && \
-      make packages -e BRANDING_DIR=../r7/document-server-package"
+      make packages ${makeargs}"
 
     uploadFiles(product, platform, [
         [section: "Installer", glob: "exe/*.exe", dest: "/"  ]
@@ -1007,11 +1010,14 @@ void buildServer(String platform, String edition='community') {
 
   } else if (platform ==~ /^linux.*/) {
 
-    if (platform == "linux_aarch64") makeargs = "-e UNAME_M=aarch64"
+    makeargs = "-e PRODUCT_NAME=${productName.toLowerCase()}"
+    if (platform == "linux_aarch64")
+      makeargs += " -e UNAME_M=aarch64"
+    if (!branding.onlyoffice)
+      makeargs += " -e BRANDING_DIR=../${branding.repo}/document-server-package"
     sh "cd document-server-package && \
-      export PRODUCT_NAME=${productName.toLowerCase()} && \
       make clean && \
-      make packages ${makeargs} -e BRANDING_DIR=../r7/document-server-package"
+      make packages ${makeargs}"
 
     uploadFiles(product, platform, [
         [section: "Ubuntu",   glob: "deb/*.deb",        dest: "/ubuntu/"  ],
@@ -1021,11 +1027,12 @@ void buildServer(String platform, String edition='community') {
       ], "document-server-package", s3prefix)
 
     if (platform == "linux_x86_64") {
+      makeargs = "-e PRODUCT_NAME=${productName.toLowerCase()}"
+      if (!branding.onlyoffice)
+        makeargs += " -e ONLYOFFICE_VALUE=ds"
       sh "cd Docker-DocumentServer && \
-        export PRODUCT_NAME=${productName.toLowerCase()} && \
-        export ONLYOFFICE_VALUE=ds && \
         make clean && \
-        make deploy"
+        make deploy ${makeargs}"
     }
   }
 }
