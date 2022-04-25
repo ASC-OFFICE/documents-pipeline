@@ -73,6 +73,7 @@ pipeline {
     PUBLISHER_URL = "http://r7-office.ru"
     SUPPORT_URL = "http://support.r7-office.ru"
     SUPPORT_MAIL = "support@r7-office.ru"
+    ASTRALINUX_SIGN_IMAGE = "r7office/astra-sign-app"
     RELEASE_BRANCH = "${defaults.branch}"
     PRODUCT_VERSION = "${defaults.version}"
     TELEGRAM_TOKEN = credentials('telegram-bot-token')
