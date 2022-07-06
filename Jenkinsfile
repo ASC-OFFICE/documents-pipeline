@@ -263,18 +263,14 @@ pipeline {
 
               /*
               if (params.core || params.server_ce) {
-                buildArtifacts(platform)
-                if (params.core)      buildCore(platform)
-                if (params.server_ce) buildServer(platform)
+                buildArtifacts(platform, "opensource")
+                buildPackages(platform, "opensource")
               }
               */
 
               if (params.desktop || params.builder || params.server_ee || params.server_de) {
                 buildArtifacts(platform, "commercial")
-                if (params.desktop)   buildDesktop(platform)
-                if (params.builder)   buildBuilder(platform)
-                if (params.server_ee) buildServer(platform, "enterprise")
-                if (params.server_de) buildServer(platform, "developer")
+                buildPackages(platform, "commercial")
               }
 
               stageStats."${env.STAGE_NAME}" = true
@@ -311,14 +307,14 @@ pipeline {
 
               /*
               if (params.core) {
-                buildArtifacts(platform)
-                buildCore(platform)
+                buildArtifacts(platform, "opensource")
+                buildPackages(platform, "opensource")
               }
               */
 
               if (params.desktop) {
                 buildArtifacts(platform, "commercial")
-                buildDesktop(platform)
+                buildPackages(platform, "commercial")
               }
 
               stageStats."${env.STAGE_NAME}" = true
@@ -355,7 +351,7 @@ pipeline {
 
               if (params.desktop) {
                 buildArtifacts(platform, "commercial")
-                buildDesktop(platform)
+                buildPackages(platform, "commercial")
               }
 
               stageStats."${env.STAGE_NAME}" = true
@@ -393,7 +389,7 @@ pipeline {
 
               if (params.desktop) {
                 buildArtifacts(platform, "commercial")
-                buildDesktop(platform)
+                buildPackages(platform, "commercial")
               }
 
               stageStats."${env.STAGE_NAME}" = true
@@ -431,14 +427,14 @@ pipeline {
 
               /*
               if (params.core) {
-                buildArtifacts(platform)
-                buildCore(platform)
+                buildArtifacts(platform, "opensource")
+                buildPackages(platform, "opensource")
               }
               */
 
               if (params.desktop) {
                 buildArtifacts(platform, "commercial")
-                buildDesktop(platform)
+                buildPackages(platform, "commercial")
               }
 
               stageStats."${env.STAGE_NAME}" = true
@@ -476,7 +472,7 @@ pipeline {
 
               if (params.desktop) {
                 buildArtifacts(platform, "commercial")
-                buildDesktop(platform)
+                buildPackages(platform, "commercial")
               }
 
               stageStats."${env.STAGE_NAME}" = true
@@ -513,7 +509,7 @@ pipeline {
 
               if (params.desktop) {
                 buildArtifacts(platform, "commercial")
-                buildDesktop(platform)
+                buildPackages(platform, "commercial")
               }
 
               stageStats."${env.STAGE_NAME}" = true
@@ -544,22 +540,15 @@ pipeline {
               checkoutRepos(varRepos)
 
               /*
-              if (params.core || params.builder || params.server_ce) {
-                buildArtifacts(platform)
-                if (params.core)      buildCore(platform)
-                if (params.server_ce) buildServer(platform)
+              if (params.core || params.server_ce) {
+                buildArtifacts(platform, "opensource")
+                buildPackages(platform, "opensource")
               }
               */
 
               if (params.desktop || params.builder || params.server_ee || params.server_de) {
                 buildArtifacts(platform, "commercial")
-                if (params.desktop)   buildDesktop(platform)
-                if (params.builder)   buildBuilder(platform)
-                if (params.server_ee) {
-                  buildServer(platform, "enterprise")
-                  // tagRepos(allRepos, "v${env.PRODUCT_VERSION}.${env.BUILD_NUMBER}")
-                }
-                if (params.server_de) buildServer(platform, "developer")
+                buildPackages(platform, "commercial")
               }
               if (params.test) linuxTest()
 
@@ -589,17 +578,16 @@ pipeline {
               ArrayList allRepos = constRepos.plus(varRepos)
               checkoutRepos(varRepos)
 
+              /*
               if (params.core || params.server_ce) {
-                buildArtifacts(platform)
-                if (params.server_ce) buildServer(platform)
+                buildArtifacts(platform, "opensource")
+                buildPackages(platform, "opensource")
               }
+              */
 
               if (params.desktop || params.builder || params.server_ee || params.server_de) {
                 buildArtifacts(platform, "commercial")
-                // if (params.desktop)   buildDesktop(platform)
-                if (params.builder)   buildBuilder(platform)
-                if (params.server_ee) buildServer(platform, "enterprise")
-                if (params.server_de) buildServer(platform, "developer")
+                buildPackages(platform, "commercial")
               }
 
               stageStats."${env.STAGE_NAME}" = true
@@ -624,8 +612,8 @@ pipeline {
               ArrayList varRepos = getVarRepos(env.BRANCH_NAME, platform, null)
               checkoutRepos(varRepos)
 
-              buildArtifacts(platform)
-              buildAndroid(env.BRANCH_NAME)
+              buildArtifacts(platform, "opensource")
+              buildPackages(platform)
 
               stageStats."${env.STAGE_NAME}" = true
             }
@@ -656,14 +644,21 @@ pipeline {
     fixed {
       node('built-in') {
         script {
-          sendTelegramMessage(getJobStats('fixed'), '-1001773122025')
+          sendTelegramMessage(getJobStats('fixed'))
+        }
+      }
+    }
+    unstable {
+      node('built-in') {
+        script {
+          sendTelegramMessage(getJobStats('unstable'))
         }
       }
     }
     failure {
       node('built-in') {
         script {
-          sendTelegramMessage(getJobStats('failed'), '-1001773122025')
+          sendTelegramMessage(getJobStats('failure'))
         }
       }
     }
@@ -698,6 +693,7 @@ def getConstRepos(String branch = 'master') {
   ].each {
     it.branch = branch
     it.dir = it.name
+    it.tag = true
   }
 }
 
@@ -732,7 +728,8 @@ def getVarRepos(String branch, String platform, String branding) {
       owner: "ONLYOFFICE",
       name: lineSplit[0],
       branch: "master",
-      dir: (lineSplit[1] == null) ? "${lineSplit[0]}" : "${lineSplit[1]}/${lineSplit[0]}"
+      dir: (lineSplit[1] == null) ? "${lineSplit[0]}" : "${lineSplit[1]}/${lineSplit[0]}",
+      tag: !lineSplit[0].startsWith("plugin-")
     ]
     if (branch != 'master') repo.branch = resolveScm(
         source: [
@@ -746,7 +743,7 @@ def getVarRepos(String branch, String platform, String branding) {
     repos.add(repo)
   }
 
-  return repos.sort()
+  return repos
 }
 
 void checkoutRepos(ArrayList repos) {
@@ -757,7 +754,7 @@ void checkoutRepos(ArrayList repos) {
 }
 
 void tagRepos(ArrayList repos, String tag) {
-  repos.each {
+  repos.findAll { it.tag }.each {
     sh """
       cd ${it.dir}
       git tag -l | xargs git tag -d
@@ -837,16 +834,55 @@ void buildArtifacts(String platform, String license = 'opensource') {
   }
 }
 
-// Build Packages
+void buildPackages(String platform, String license = 'opensource') {
+  Boolean isOpenSource = license == "opensource"
+  Boolean isCommercial = license == "commercial"
+  // Boolean pCore = platform in ["windows_x64", "windows_x86", "macos_x86_64", "linux_x86_64"]
+  Boolean pDesktop = !(platform in ["linux_aarch64", "android"])
+  Boolean pBuilder = platform in ["windows_x64", "linux_x86_64", "linux_aarch64"]
+  Boolean pServer = platform in ["windows_x64", "linux_x86_64", "linux_aarch64"]
+  Boolean pMobile = platform == "android"
+  ArrayList targets = ["clean", "deploy"]
+  if (params.signing)                              targets.add("sign")
+  // if (params.core && isOpenSource && pCore)        targets.add("core")
+  if (params.desktop && isCommercial && pDesktop)  targets.add("desktop")
+  if (params.builder && isCommercial && pBuilder)  targets.add("builder")
+  // if (params.server_ce && isOpenSource && pServer) targets.add("server-ce")
+  if (params.server_ee && isCommercial && pServer) targets.add("server-ee")
+  if (params.server_de && isCommercial && pServer) targets.add("server-de")
+  // if (params.mobile && isOpenSource && pMobile)    targets.add("mobile")
 
-void buildCore(String platform) {
+  String args = " --platform ${platform}" \
+              + " --targets ${targets.join(' ')}" \
+              + " --version ${env.PRODUCT_VERSION}" \
+              + " --build ${env.BUILD_NUMBER}"
+  if (!branding.onlyoffice)
+    args += " --branding ${branding.repo}"
+
+  if (platforms[platform].isUnix && !pMobile)
+    sh "cd build_tools && ./make_package.py ${args}"
+  else
+    bat "cd build_tools && make_package.py ${args}"
+
+  // if (params.core && isOpenSource && pCore)        deployCore(platform)
+  if (params.desktop && isCommercial && pDesktop)  deployDesktop(platform)
+  if (params.builder && isCommercial && pBuilder)  deployBuilder(platform)
+  // if (params.server_ce && isOpenSource && pServer) deployServer(platform, "community")
+  if (params.server_ee && isCommercial && pServer) deployServer(platform, "enterprise")
+  if (params.server_de && isCommercial && pServer) deployServer(platform, "developer")
+  if (params.mobile && isOpenSource && pMobile)    deployMobile(env.BRANCH_NAME)
+}
+
+// Deploy Packages
+
+void deployCore(String platform) {
   String branch = env.BRANCH_NAME
   String version = env.PRODUCT_VERSION
   String build = env.BUILD_NUMBER
   LinkedHashMap path = [
     windows_x64:  [os: "windows", version: "${version}.${build}", arch: "x64"],
     windows_x86:  [os: "windows", version: "${version}.${build}", arch: "x86"],
-    macos_x86_64: [os: "macos",   version: "${version}-${build}", arch: "x64"],
+    macos_x86_64: [os: "mac",     version: "${version}-${build}", arch: "x64"],
     linux_x86_64: [os: "linux",   version: "${version}-${build}", arch: "x64"]
   ]
   def p = path[platform]
@@ -865,26 +901,10 @@ void buildCore(String platform) {
   if (platforms[platform].isUnix) sh uploadCmd else powershell uploadCmd
 }
 
-void buildDesktop(String platform) {
+void deployDesktop(String platform) {
   String version = "${env.PRODUCT_VERSION}-${env.BUILD_NUMBER}"
-  String makeargs = ""
 
   if (platform ==~ /^windows.*/) {
-
-    ArrayList targets = ['clean']
-    if (platform == 'windows_x64') {
-      targets += ['innosetup-x64', 'winsparkle-update', 'winsparkle-files',
-                  'advinst-x64', 'portable-zip-x64', 'portable-evb-x64']
-    } else if (platform == 'windows_x86') {
-      targets += ['innosetup-x86', 'winsparkle-update',
-                  'advinst-x86', 'portable-zip-x86', 'portable-evb-x86']
-    } else if (platform == 'windows_x64_xp') {
-      targets += ['innosetup-x64-xp', 'winsparkle-update', 'portable-zip-x64-xp']      
-    } else if (platform == 'windows_x86_xp') {
-      targets += ['innosetup-x86-xp', 'winsparkle-update', 'portable-zip-x86-xp']
-    }
-    if (params.signing) targets += ['sign']
-    buildPackages("desktop", platform, targets)
     uploadFiles("desktop", platform, [
         [section: "Installer",  glob: "*.exe", dest: "/"],
         [section: "Installer",  glob: "*.msi", dest: "/"],
@@ -902,13 +922,10 @@ void buildDesktop(String platform) {
     ArrayList targets = ['clean']
     if (platform == "macos_x86_64_v8") {
       suffix = "v8"
-      targets = ["diskimage-v8-x86_64"]
     } else if (platform == "macos_x86_64") {
       suffix = "x86_64"
-      targets = ["diskimage-x86_64"]
     } else if (platform == "macos_arm64") {
       suffix = "arm"
-      targets = ["diskimage-arm64"]
     }
 
     sh """#!/bin/bash -e
@@ -925,7 +942,6 @@ void buildDesktop(String platform) {
       echo -n "CURRENT_MACOS_BUILD="
       \$plistbuddy -c 'print :CFBundleVersion' \$path
     """
-    buildPackages("desktop", platform, targets)
     uploadFiles("desktop", platform, [
         [section: "Disk Image", glob: "*.dmg", dest: "/"],
         [section: "Sparkle",
@@ -934,14 +950,6 @@ void buildDesktop(String platform) {
       ], "r7/desktop-apps/macos/build", "${s3prefix}/macos/${version}/${suffix}")
 
   } else if (platform ==~ /^linux.*/) {
-
-    if (!branding.onlyoffice)
-      makeargs += " -e BRANDING_DIR=../../../../${branding.repo}/desktop-apps/win-linux/package/linux"
-    if (platform == "linux_aarch64")
-      makeargs += " -e UNAME_M=aarch64"
-    sh "cd desktop-apps/win-linux/package/linux && \
-      make clean && \
-      make packages ${makeargs}"
     uploadFiles("desktop", platform, [
         [section: "Ubuntu",   glob: "deb/*.deb",        dest: "/ubuntu/"  ],
         [section: "CentOS",   glob: "rpm/**/*.rpm",     dest: "/centos/"  ],
@@ -955,40 +963,25 @@ void buildDesktop(String platform) {
   }
 }
 
-void buildBuilder(String platform) {
+void deployBuilder(String platform) {
   String version = "${env.PRODUCT_VERSION}-${env.BUILD_NUMBER}"
   String makeargs = ""
 
   if (platform ==~ /^windows.*/) {
-
-    ArrayList targets = ['clean']
-    if (platform == 'windows_x64') targets += ['innosetup-x64', 'portable-x64']
-    if (params.signing) targets += ['sign']
-    buildPackages("builder", platform, targets)
     uploadFiles("builder", platform, [
         [section: "Installer", glob: "exe/*.exe", dest: "/"],
         [section: "Portable",  glob: "zip/*.zip", dest: "/"]
       ], "document-builder-package", "${s3prefix}/windows/${version}/builder")
-
   } else if (platform ==~ /^linux.*/) {
-
-    if (platform == "linux_aarch64")
-      makeargs += " -e UNAME_M=aarch64"
-    if (!branding.onlyoffice)
-      makeargs += " -e BRANDING_DIR=../${branding.repo}/document-builder-package"
-    sh "cd document-builder-package && \
-      make clean && \
-      make packages ${makeargs}"
     uploadFiles("builder", platform, [
         [section: "Ubuntu",   glob: "deb/*.deb",    dest: "/ubuntu/"],
         [section: "CentOS",   glob: "rpm/**/*.rpm", dest: "/centos/"],
         [section: "Portable", glob: "tar/*.tar.gz", dest: "/linux/" ]
       ], "document-builder-package", s3prefix)
-
   }
 }
 
-void buildServer(String platform, String edition='community') {
+void deployServer(String platform, String edition='community') {
   String version = "${env.PRODUCT_VERSION}-${env.BUILD_NUMBER}"
   String product, productName, makeargs = ""
 
@@ -1047,7 +1040,7 @@ void buildServer(String platform, String edition='community') {
   }
 }
 
-void buildAndroid(String branch = 'master', String config = 'release') {
+void deployMobile(String branch = 'master', String config = 'release') {
   String version = "${env.PRODUCT_VERSION}-${env.BUILD_NUMBER}"
 
   sh "rm -rfv *.zip && \
@@ -1056,19 +1049,6 @@ void buildAndroid(String branch = 'master', String config = 'release') {
   uploadFiles("mobile", "android", [
       [section: "Libs", glob: "*.zip", dest: "/android/"],
     ], "", s3prefix)
-}
-
-void buildPackages(String product, String platform, ArrayList targets) {
-  String args = "--product ${product}" \
-    + " --version ${env.PRODUCT_VERSION}" \
-    + " --build ${env.BUILD_NUMBER}" \
-    + " --targets ${targets.join(' ')}"
-  if (!branding.onlyoffice)
-    args += " --branding ${branding.repo}"
-  if (platforms[platform].isUnix)
-    sh "cd build_tools && ./make_package.py ${args}"
-  else
-    bat "cd build_tools && call python make_package.py ${args}"
 }
 
 // Upload
@@ -1210,7 +1190,7 @@ def getJobStats(String jobStatus) {
   return text
 }
 
-void sendTelegramMessage(String text, String chatId, Boolean markdown = true) {
+void sendTelegramMessage(String text, String chatId = '-1001773122025', Boolean markdown = true) {
   if (params.notify) sh(
     label: "Send Telegram Message",
     script: "curl -X POST -s -S \
