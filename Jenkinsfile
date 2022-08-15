@@ -971,7 +971,7 @@ void buildDesktop(String platform) {
     """
     uploadFiles("desktop", platform, [
         [section: "Checksums", glob: "*.txt", dest: "/"],
-      ], "desktop-apps/macos/build/update", "${s3prefix}/macos/${version}/${suffix}")
+      ], "r7/desktop-apps/macos/build/update", "${s3prefix}/macos/${version}/${suffix}")
 
   } else if (platform ==~ /^linux.*/) {
 
