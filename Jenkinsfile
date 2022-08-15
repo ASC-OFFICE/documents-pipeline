@@ -576,7 +576,7 @@ pipeline {
                 if (params.server_de) buildServer(platform, "developer")
                 // if (params.server_ee || params.server_de) {
                 //   tagRepos(allRepos, gitTag)
-                //   try {
+                //   catchError(stageResult: 'UNSTABLE', message: 'Docker build failure') {
                 //     sh """
                 //       repo=ONLYOFFICE/Docker-DocumentServer
                 //       workflow=4testing-build.yml
@@ -587,10 +587,6 @@ pipeline {
                 //       gh --repo \$repo run watch \$run_id --interval 15 > /dev/null
                 //       gh --repo \$repo run view \$run_id --verbose --exit-status
                 //     """
-                //   }
-                //   catch(err) {
-                //     echo "Caught: ${err}"
-                //     unstable("Docker build failure")
                 //   }
                 // }
               }
@@ -1224,24 +1220,23 @@ def getHtml(ArrayList data) {
   }
 
   text = "<html>\n<head>" \
-    + "\n  <link rel=\"stylesheet\" href=\"https://unpkg.com/style.css\">" \
-    + "\n  <style type=\"text/css\">body { margin: 24px; }</style>" \
+    + "\n<link rel=\"stylesheet\" href=\"/userContent/style.css\">" \
+    + "\n<style type=\"text/css\">body { margin: 24px; }</style>" \
     + "\n<head>\n<body>"
   data.groupBy { it.platform }.sort().each { platform, sections ->
-    text += "\n  <h3>${platform}</h3>\n  <ul>"
+    text += "\n<h3>${platform}</h3>\n<ul>"
     sections.groupBy { it.section }.each { section, files ->
-      text += "\n    <li><b>${section}</b></li>\n    <ul>"
+      text += "\n<li><b>${section}</b></li>\n<ul>"
       files.each {
         url = "https://s3.${s3region}.amazonaws.com/${it.path}"
-        text += "\n      <li>" \
-          + "\n        <a href=\"${url}\">${it.file}</a>" \
-          + ", Size: ${size(it.size)}B" \
-          + "\n      </li>"
+        text += "\n<li>" \
+          + "\n<a href=\"${url}\">${it.file}</a> (${size(it.size)}B)" \
+          + "\n</li>"
           // + ", MD5: <code>${it.md5}</code>" \
       }
-      text += "\n    </ul>"
+      text += "\n</ul>"
     }
-    text += "\n  </ul>"
+    text += "\n</ul>"
   }
   text += "\n</body>\n</html>"
 
