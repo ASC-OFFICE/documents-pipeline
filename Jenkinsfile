@@ -1092,20 +1092,23 @@ void buildBuilder(String platform) {
 
 void buildServer(String platform, String edition='community') {
   String version = "${env.PRODUCT_VERSION}-${env.BUILD_NUMBER}"
-  String product, productName, makeargs = ""
+  String product, productName, productEdition, makeargs = ""
 
   switch(edition) {
     case "community":
       product = "server_ce"
       productName = "DocumentServer"
+      productEdition = ""
       break
     case "enterprise":
       product = "server_ee"
       productName = "DocumentServer-EE"
+      productEdition = "-ee"
       break
     case "developer":
       product = "server_de"
       productName = "DocumentServer-DE"
+      productEdition = "-de"
       break
   }
 
@@ -1141,7 +1144,7 @@ void buildServer(String platform, String edition='community') {
       ], "document-server-package", s3prefix + distPrefix)
 
     if (platform == "linux_x86_64") {
-      makeargs = "-e PRODUCT_NAME=${productName.toLowerCase()}"
+      makeargs = "-e PRODUCT_EDITION=${productEdition}"
       if (!branding.onlyoffice)
         makeargs += " -e ONLYOFFICE_VALUE=ds"
       sh "cd Docker-DocumentServer && \
