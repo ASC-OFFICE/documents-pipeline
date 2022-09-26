@@ -684,16 +684,7 @@ pipeline {
           echo "NODE_NAME=" + env.NODE_NAME
 
           catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE', message: 'Docker build failure') {
-            sh """
-              repo=ONLYOFFICE/Docker-DocumentServer
-              workflow=4testing-build.yml
-              sleep 5
-              # gh --repo \$repo workflow run \$workflow
-              run_id=\$(gh --repo \$repo run list --workflow \$workflow \\
-                --branch ${gitTag} --json databaseId --jq '.[0].databaseId')
-              gh --repo \$repo run watch \$run_id --interval 15 > /dev/null
-              gh --repo \$repo run view \$run_id --verbose --exit-status
-            """
+            checkDocker()
           }
         }
       }
@@ -996,9 +987,8 @@ void buildDesktop(String platform) {
     buildPackages("desktop", platform, targets)
     uploadFiles("desktop", platform, [
         [section: "Disk Image", glob: "*.dmg", dest: "/"],
-        [section: "Sparkle",
-         glob: "${branding.company}-${suffix}-*.zip,update/*.delta,update/*.xml,update/*.html",
-         dest: "/"],
+        [section: "Archive", glob: "${branding.company}-${suffix}-*.zip", dest: "/"],
+        [section: "Sparkle", glob: "update/*.delta,update/*.xml,update/*.html", dest: "/"],
       ], "r7/desktop-apps/macos/build", "${s3prefix}/macos/${version}/${suffix}")
 
     sh """#!/bin/bash -e
@@ -1177,6 +1167,33 @@ void buildPackages(String product, String platform, ArrayList targets) {
   else
     bat "cd build_tools && call python make_package.py ${args}"
 }
+
+/*
+void buildDocker() {
+  sh """
+    gh workflow run 4testing-build.yml \
+      --repo ONLYOFFICE/Docker-DocumentServer \
+      --ref \$BRANCH_NAME \
+      -f build=\$BUILD_NUMBER \
+      -f amd64=${params.linux_x86_64} \
+      -f arm64=${params.linux_aarch64} \
+      -f community=${params.server_ce} \
+      -f enterprise=${params.server_ee} \
+      -f developer=${params.server_de}
+  """
+}
+
+void checkDocker() {
+  sh """
+    REPO=ONLYOFFICE/Docker-DocumentServer
+    sleep 5
+    RUN_ID=\$(gh run list --repo \$REPO --workflow 4testing-build.yml \
+      --branch \$BRANCH_NAME --json databaseId --jq '.[0].databaseId')
+    gh --repo \$REPO run watch \$RUN_ID --interval 15 > /dev/null
+    gh --repo \$REPO run view \$RUN_ID --verbose --exit-status
+  """
+}
+*/
 
 // Upload
 
