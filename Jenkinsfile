@@ -49,18 +49,19 @@ branding = [
   repo:       "r7",
   company:    "R7-Office",
   company_lc: "r7-office",
-  winWsDir:   "r7",
 ]
 
 platforms = [
   windows_x64:     [title: "Windows x64",     build: "win_64",      isUnix: false],
-  windows_x64_xp:  [title: "Windows XP x64",  build: "win_64_xp",   isUnix: false],
+  windows_x64_xp:  [title: "Windows x64 XP",  build: "win_64_xp",   isUnix: false],
   windows_x86:     [title: "Windows x86",     build: "win_32",      isUnix: false],
-  windows_x86_xp:  [title: "Windows XP x86",  build: "win_32_xp",   isUnix: false],
+  windows_x86_xp:  [title: "Windows x86 XP",  build: "win_32_xp",   isUnix: false],
   macos_x86_64:    [title: "macOS x86_64",    build: "mac_64",      isUnix: true ],
-  macos_x86_64_v8: [title: "macOS V8 x86_64", build: "mac_64",      isUnix: true ],
-  macos_arm64:     [title: "macOS ARM64",     build: "mac_arm64",   isUnix: true ],
+  macos_x86_64_v8: [title: "macOS x86_64 V8", build: "mac_64",      isUnix: true ],
+  macos_arm64:     [title: "macOS arm64",     build: "mac_arm64",   isUnix: true ],
   linux_x86_64:    [title: "Linux x86_64",    build: "linux_64",    isUnix: true ],
+  linux_x86_64_u14: [title: "Linux x86_64 (Ubuntu 14)", build: "linux_64", isUnix: true ],
+  linux_x86_64_u16: [title: "Linux x86_64 (Ubuntu 16)", build: "linux_64", isUnix: true ],
   linux_aarch64:   [title: "Linux aarch64",   build: "linux_arm64", isUnix: true ],
   android:         [title: "Android",         build: "android",     isUnix: true ]
 ]
@@ -107,12 +108,12 @@ pipeline {
     )
     booleanParam (
       name:         'windows_x64_xp',
-      description:  'Build Windows XP x64 targets (Visual Studio 2015)',
+      description:  'Build Windows x64 XP targets (Visual Studio 2015)',
       defaultValue: defaults.windows_x64_xp
     )
     booleanParam (
       name:         'windows_x86_xp',
-      description:  'Build Windows XP x86 targets (Visual Studio 2015)',
+      description:  'Build Windows x86 XP targets (Visual Studio 2015)',
       defaultValue: defaults.windows_x86_xp
     )
     // macOS
@@ -121,14 +122,16 @@ pipeline {
       description:  'Build macOS x86-64 targets',
       defaultValue: defaults.macos_x86_64
     )
+    /*
     booleanParam (
       name:         'macos_x86_64_v8',
-      description:  'Build macOS V8 x86-64 targets',
+      description:  'Build macOS x86-64 V8 targets',
       defaultValue: defaults.macos_x86_64_v8
     )
+    */
     booleanParam (
       name:         'macos_arm64',
-      description:  'Build macOS ARM64 targets',
+      description:  'Build macOS arm64 targets',
       defaultValue: defaults.macos_arm64
     )
     // Linux
@@ -228,6 +231,7 @@ pipeline {
           s3bucket = "repo-doc-onlyoffice-com"
           s3prefix = "${s3bucket}/${branding.company_lc}/${env.RELEASE_BRANCH}"
           branchDir = env.BRANCH_NAME.replaceAll(/\//,'_')
+          gitTag = "v${env.PRODUCT_VERSION}.${env.BUILD_NUMBER}"
           listDeploy = []
           stageStats = [:]
         }
@@ -240,7 +244,7 @@ pipeline {
           agent {
             node {
               label 'windows_x64'
-              customWorkspace "C:\\${branding.winWsDir}\\${branchDir}_x64"
+              customWorkspace "C:\\r7\\${branchDir}_x64"
             }
           }
           when {
@@ -250,7 +254,6 @@ pipeline {
           steps {
             script {
               echo "NODE_NAME=" + env.NODE_NAME
-              stageStats."${env.STAGE_NAME}" = false
 
               if (params.wipe)
                 deleteDir()
@@ -276,16 +279,19 @@ pipeline {
                 if (params.server_ee) buildServer(platform, "enterprise")
                 if (params.server_de) buildServer(platform, "developer")
               }
-
-              stageStats."${env.STAGE_NAME}" = true
             }
+          }
+          post {
+            success  { script { stageStats[STAGE_NAME] = 0 } }
+            unstable { script { stageStats[STAGE_NAME] = 1 } }
+            failure  { script { stageStats[STAGE_NAME] = 2 } }
           }
         }
         stage('Windows x86') {
           agent {
             node {
               label 'windows_x86'
-              customWorkspace "C:\\${branding.winWsDir}\\${branchDir}_x86"
+              customWorkspace "C:\\r7\\${branchDir}_x86"
             }
           }
           when {
@@ -298,7 +304,6 @@ pipeline {
           steps {
             script {
               echo "NODE_NAME=" + env.NODE_NAME
-              stageStats."${env.STAGE_NAME}" = false
 
               if (params.wipe)
                 deleteDir()
@@ -316,20 +321,24 @@ pipeline {
               }
               */
 
-              if (params.desktop) {
+              if (params.desktop || params.builder) {
                 buildArtifacts(platform, "commercial")
-                buildDesktop(platform)
+                if (params.desktop) buildDesktop(platform)
+                if (params.builder) buildBuilder(platform)
               }
-
-              stageStats."${env.STAGE_NAME}" = true
             }
           }
+          post {
+            success  { script { stageStats[STAGE_NAME] = 0 } }
+            unstable { script { stageStats[STAGE_NAME] = 1 } }
+            failure  { script { stageStats[STAGE_NAME] = 2 } }
+          }
         }
-        stage('Windows XP x64') {
+        stage('Windows x64 XP') {
           agent {
             node {
               label 'windows_x64_xp'
-              customWorkspace "C:\\${branding.winWsDir}\\${branchDir}_x64_xp"
+              customWorkspace "C:\\r7\\${branchDir}_x64_xp"
             }
           }
           when {
@@ -342,7 +351,6 @@ pipeline {
           steps {
             script {
               echo "NODE_NAME=" + env.NODE_NAME
-              stageStats."${env.STAGE_NAME}" = false
 
               if (params.wipe)
                 deleteDir()
@@ -357,16 +365,19 @@ pipeline {
                 buildArtifacts(platform, "commercial")
                 buildDesktop(platform)
               }
-
-              stageStats."${env.STAGE_NAME}" = true
             }
           }
+          post {
+            success  { script { stageStats[STAGE_NAME] = 0 } }
+            unstable { script { stageStats[STAGE_NAME] = 1 } }
+            failure  { script { stageStats[STAGE_NAME] = 2 } }
+          }
         }
-        stage('Windows XP x86') {
+        stage('Windows x86 XP') {
           agent {
             node {
               label 'windows_x86_xp'
-              customWorkspace "C:\\${branding.winWsDir}\\${branchDir}_x86_xp"
+              customWorkspace "C:\\r7\\${branchDir}_x86_xp"
             }
           }
           when {
@@ -380,7 +391,6 @@ pipeline {
           steps {
             script {
               echo "NODE_NAME=" + env.NODE_NAME
-              stageStats."${env.STAGE_NAME}" = false
 
               if (params.wipe)
                 deleteDir()
@@ -395,9 +405,12 @@ pipeline {
                 buildArtifacts(platform, "commercial")
                 buildDesktop(platform)
               }
-
-              stageStats."${env.STAGE_NAME}" = true
             }
+          }
+          post {
+            success  { script { stageStats[STAGE_NAME] = 0 } }
+            unstable { script { stageStats[STAGE_NAME] = 1 } }
+            failure  { script { stageStats[STAGE_NAME] = 2 } }
           }
         }
         // macOS
@@ -418,7 +431,6 @@ pipeline {
           steps {
             script {
               echo "NODE_NAME=" + env.NODE_NAME
-              stageStats."${env.STAGE_NAME}" = false
 
               if (params.wipe)
                 deleteDir()
@@ -439,13 +451,18 @@ pipeline {
               if (params.desktop) {
                 buildArtifacts(platform, "commercial")
                 buildDesktop(platform)
+                // buildBuilder(platform)
               }
-
-              stageStats."${env.STAGE_NAME}" = true
             }
           }
+          post {
+            success  { script { stageStats[STAGE_NAME] = 0 } }
+            unstable { script { stageStats[STAGE_NAME] = 1 } }
+            failure  { script { stageStats[STAGE_NAME] = 2 } }
+          }
         }
-        stage('macOS V8 x86_64') {
+        /*
+        stage('macOS x86_64 V8') {
           agent { label 'macos_x86_64_v8' }
           environment {
             FASTLANE_HIDE_TIMESTAMP = '1'
@@ -463,7 +480,6 @@ pipeline {
           steps {
             script {
               echo "NODE_NAME=" + env.NODE_NAME
-              stageStats."${env.STAGE_NAME}" = false
 
               if (params.wipe)
                 deleteDir()
@@ -478,12 +494,16 @@ pipeline {
                 buildArtifacts(platform, "commercial")
                 buildDesktop(platform)
               }
-
-              stageStats."${env.STAGE_NAME}" = true
             }
           }
+          post {
+            success  { script { stageStats[STAGE_NAME] = 0 } }
+            unstable { script { stageStats[STAGE_NAME] = 1 } }
+            failure  { script { stageStats[STAGE_NAME] = 2 } }
+          }
         }
-        stage('macOS ARM64') {
+        */
+        stage('macOS arm64') {
           agent { label 'macos_arm64' }
           environment {
             FASTLANE_HIDE_TIMESTAMP = '1'
@@ -500,7 +520,6 @@ pipeline {
           steps {
             script {
               echo "NODE_NAME=" + env.NODE_NAME
-              stageStats."${env.STAGE_NAME}" = false
 
               if (params.wipe)
                 deleteDir()
@@ -514,10 +533,14 @@ pipeline {
               if (params.desktop) {
                 buildArtifacts(platform, "commercial")
                 buildDesktop(platform)
+                // buildBuilder(platform)
               }
-
-              stageStats."${env.STAGE_NAME}" = true
             }
+          }
+          post {
+            success  { script { stageStats[STAGE_NAME] = 0 } }
+            unstable { script { stageStats[STAGE_NAME] = 1 } }
+            failure  { script { stageStats[STAGE_NAME] = 2 } }
           }
         }
         // Linux
@@ -527,10 +550,13 @@ pipeline {
             expression { params.linux_x86_64 }
             beforeAgent true
           }
+          environment {
+            GITHUB_TOKEN = credentials('github-token')
+            DISTRIB_RELEASE = '14.04'
+          }
           steps {
             script {
               echo "NODE_NAME=" + env.NODE_NAME
-              stageStats."${env.STAGE_NAME}" = false
 
               if (params.wipe)
                 deleteDir()
@@ -555,16 +581,17 @@ pipeline {
                 buildArtifacts(platform, "commercial")
                 if (params.desktop)   buildDesktop(platform)
                 if (params.builder)   buildBuilder(platform)
-                if (params.server_ee) {
-                  buildServer(platform, "enterprise")
-                  // tagRepos(allRepos, "v${env.PRODUCT_VERSION}.${env.BUILD_NUMBER}")
-                }
+                if (params.server_ee) buildServer(platform, "enterprise")
                 if (params.server_de) buildServer(platform, "developer")
               }
-              if (params.test) linuxTest()
 
-              stageStats."${env.STAGE_NAME}" = true
+              if (params.test) linuxTest()
             }
+          }
+          post {
+            success  { script { stageStats[STAGE_NAME] = 0 } }
+            unstable { script { stageStats[STAGE_NAME] = 1 } }
+            failure  { script { stageStats[STAGE_NAME] = 2 } }
           }
         }
         stage('Linux aarch64') {
@@ -573,10 +600,12 @@ pipeline {
             expression { params.linux_aarch64 }
             beforeAgent true
           }
+          environment {
+            DISTRIB_RELEASE = '16.04'
+          }
           steps {
             script {
               echo "NODE_NAME=" + env.NODE_NAME
-              stageStats."${env.STAGE_NAME}" = false
 
               if (params.wipe)
                 deleteDir()
@@ -601,9 +630,12 @@ pipeline {
                 if (params.server_ee) buildServer(platform, "enterprise")
                 if (params.server_de) buildServer(platform, "developer")
               }
-
-              stageStats."${env.STAGE_NAME}" = true
             }
+          }
+          post {
+            success  { script { stageStats[STAGE_NAME] = 0 } }
+            unstable { script { stageStats[STAGE_NAME] = 1 } }
+            failure  { script { stageStats[STAGE_NAME] = 2 } }
           }
         }
         // Android
@@ -616,7 +648,6 @@ pipeline {
           steps {
             script {
               echo "NODE_NAME=" + env.NODE_NAME
-              stageStats."${env.STAGE_NAME}" = false
 
               if (params.wipe) deleteDir()
 
@@ -626,21 +657,48 @@ pipeline {
 
               buildArtifacts(platform)
               buildAndroid(env.BRANCH_NAME)
-
-              stageStats."${env.STAGE_NAME}" = true
             }
+          }
+          post {
+            success  { script { stageStats[STAGE_NAME] = 0 } }
+            unstable { script { stageStats[STAGE_NAME] = 1 } }
+            failure  { script { stageStats[STAGE_NAME] = 2 } }
           }
         }
       }
     }
+    /*
+    stage('Docker') {
+      agent { label 'linux_x86_64 || linux_aarch64 || linux_x86_64_ubuntu16' }
+      environment {
+        GITHUB_TOKEN = credentials('github-token')
+      }
+      when {
+        expression {
+          return params.linux_x86_64 && (params.server_ce || params.server_ee || params.server_de)
+        }
+        beforeAgent true
+      }
+      steps {
+        script {
+          echo "NODE_NAME=" + env.NODE_NAME
+
+          catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE', message: 'Docker build failure') {
+            checkDocker()
+          }
+        }
+      }
+      post {
+        success  { script { stageStats[STAGE_NAME] = 0 } }
+        unstable { script { stageStats[STAGE_NAME] = 1 } }
+        failure  { script { stageStats[STAGE_NAME] = 2 } }
+      }
+    }
+    */
   }
   post {
     always {
-      node('built-in') {
-        script {
-          generateReports()
-        }
-      }
+      node('built-in') { script { generateReports() } }
       script {
         if (params.linux_x86_64 || params.linux_aarch64)
           build (
@@ -654,18 +712,13 @@ pipeline {
       }
     }
     fixed {
-      node('built-in') {
-        script {
-          sendTelegramMessage(getJobStats('fixed'), '-1001773122025')
-        }
-      }
+      node('built-in') { script { sendTelegramMessage('fixed') } }
+    }
+    unstable {
+      node('built-in') { script { sendTelegramMessage('unstable') } }
     }
     failure {
-      node('built-in') {
-        script {
-          sendTelegramMessage(getJobStats('failed'), '-1001773122025')
-        }
-      }
+      node('built-in') { script { sendTelegramMessage('failure') } }
     }
   }
 }
@@ -680,9 +733,10 @@ void checkoutRepo(String repo, String branch = 'master', String dir = repo.minus
       branches: [[name: 'refs/heads/' + branch]],
       doGenerateSubmoduleConfigurations: false,
       extensions: [
-        [$class: 'SubmoduleOption', recursiveSubmodules: true],
+        [$class: 'AuthorInChangelog'],
         [$class: 'RelativeTargetDirectory', relativeTargetDir: dir],
-        [$class: 'ScmName', name: "${repo}"]
+        [$class: 'ScmName', name: "${repo}"],
+        [$class: 'SubmoduleOption', recursiveSubmodules: true]
       ],
       submoduleCfg: [],
       userRemoteConfigs: [[url: "git@github.com:${repo}.git"]]
@@ -698,6 +752,7 @@ def getConstRepos(String branch = 'master') {
   ].each {
     it.branch = branch
     it.dir = it.name
+    it.tag = true
   }
 }
 
@@ -732,7 +787,8 @@ def getVarRepos(String branch, String platform, String branding) {
       owner: "ONLYOFFICE",
       name: lineSplit[0],
       branch: "master",
-      dir: (lineSplit[1] == null) ? "${lineSplit[0]}" : "${lineSplit[1]}/${lineSplit[0]}"
+      dir: (lineSplit[1] == null) ? "${lineSplit[0]}" : "${lineSplit[1]}/${lineSplit[0]}",
+      tag: (!lineSplit[0].startsWith("plugin-") && lineSplit[0] != "onlyoffice.github.io")
     ]
     if (branch != 'master') repo.branch = resolveScm(
         source: [
@@ -746,7 +802,7 @@ def getVarRepos(String branch, String platform, String branding) {
     repos.add(repo)
   }
 
-  return repos.sort()
+  return repos
 }
 
 void checkoutRepos(ArrayList repos) {
@@ -757,7 +813,7 @@ void checkoutRepos(ArrayList repos) {
 }
 
 void tagRepos(ArrayList repos, String tag) {
-  repos.each {
+  repos.findAll { it.tag }.each {
     sh """
       cd ${it.dir}
       git tag -l | xargs git tag -d
@@ -775,7 +831,7 @@ def getModules(String platform, String license = "any") {
   Boolean isCommercial = license in ["commercial", "any"]
   Boolean pCore = platform in ["win_64", "win_32", "mac_64", "linux_64", "linux_arm64"]
   Boolean pDesktop = platform != "linux_arm64"
-  Boolean pBuilder = platform in ["win_64", "linux_64", "linux_arm64"]
+  Boolean pBuilder = platform in ["win_64", "win_32", "linux_64", "linux_arm64"]
   Boolean pServer = platform in ["win_64", "linux_64", "linux_arm64"]
   Boolean pMobile = platform == "android"
 
@@ -846,8 +902,10 @@ void buildCore(String platform) {
   LinkedHashMap path = [
     windows_x64:  [os: "windows", version: "${version}.${build}", arch: "x64"],
     windows_x86:  [os: "windows", version: "${version}.${build}", arch: "x86"],
-    macos_x86_64: [os: "macos",   version: "${version}-${build}", arch: "x64"],
-    linux_x86_64: [os: "linux",   version: "${version}-${build}", arch: "x64"]
+    macos_x86_64: [os: "mac",     version: "${version}-${build}", arch: "x64"],
+    linux_x86_64: [os: "linux",   version: "${version}-${build}", arch: "x64"],
+    linux_x86_64_u14: [os: "linux", version: "${version}-${build}", arch: "x64"],
+    linux_x86_64_u16: [os: "linux", version: "${version}-${build}", arch: "x64"]
   ]
   def p = path[platform]
   Closure coreDeployPath = {
@@ -867,15 +925,24 @@ void buildCore(String platform) {
 
 void buildDesktop(String platform) {
   String version = "${env.PRODUCT_VERSION}-${env.BUILD_NUMBER}"
-  String suffix, target, makeargs = ""
+  String makeargs = ""
 
   if (platform ==~ /^windows.*/) {
 
-    if (!branding.onlyoffice)
-      makeargs += " -e BRANDING_DIR=../${branding.repo}/desktop-apps"
-    bat "cd desktop-apps && \
-      make clean-package && \
-      make packages ${makeargs}"
+    ArrayList targets = ['clean']
+    if (platform == 'windows_x64') {
+      targets += ['innosetup-x64', 'winsparkle-update', 'winsparkle-files',
+                  'advinst-x64', 'portable-zip-x64', 'portable-evb-x64']
+    } else if (platform == 'windows_x86') {
+      targets += ['innosetup-x86', 'winsparkle-update',
+                  'advinst-x86', 'portable-zip-x86', 'portable-evb-x86']
+    } else if (platform == 'windows_x64_xp') {
+      targets += ['innosetup-x64-xp', 'winsparkle-update', 'portable-zip-x64-xp']      
+    } else if (platform == 'windows_x86_xp') {
+      targets += ['innosetup-x86-xp', 'winsparkle-update', 'portable-zip-x86-xp']
+    }
+    if (params.signing) targets += ['sign']
+    buildPackages("desktop", platform, targets)
     uploadFiles("desktop", platform, [
         [section: "Installer",  glob: "*.exe", dest: "/"],
         [section: "Installer",  glob: "*.msi", dest: "/"],
@@ -889,16 +956,19 @@ void buildDesktop(String platform) {
 
   } else if (platform ==~ /^macos.*/) {
 
+    String suffix
+    ArrayList targets = ['clean']
     if (platform == "macos_x86_64_v8") {
       suffix = "v8"
-      target = "diskimage-v8-x86_64"
+      targets.add("diskimage-x86_64-v8")
     } else if (platform == "macos_x86_64") {
       suffix = "x86_64"
-      target = "diskimage-x86_64"
+      targets.add("diskimage-x86_64")
     } else if (platform == "macos_arm64") {
       suffix = "arm"
-      target = "diskimage-arm64"
+      targets.add("diskimage-arm64")
     }
+    targets.add("sparkle-updates")
 
     sh """#!/bin/bash -e
       plistbuddy=/usr/libexec/PlistBuddy
@@ -914,17 +984,21 @@ void buildDesktop(String platform) {
       echo -n "CURRENT_MACOS_BUILD="
       \$plistbuddy -c 'print :CFBundleVersion' \$path
     """
-    sh "rm -rfv \
-      ~/Library/Developer/Xcode/Archives/* \
-      ~/Library/Caches/Sparkle_generate_appcast/*"
-    sh "cd build_tools && \
-      ./make_packages.py --product desktop --package ${target} --branding r7"
+    buildPackages("desktop", platform, targets)
     uploadFiles("desktop", platform, [
         [section: "Disk Image", glob: "*.dmg", dest: "/"],
-        [section: "Sparkle",
-         glob: "${branding.company}-${suffix}-*.zip,update/*.delta,update/*.xml,update/*.html",
-         dest: "/"],
+        [section: "Archive", glob: "${branding.company}-${suffix}-*.zip", dest: "/"],
+        [section: "Sparkle", glob: "update/*.delta,update/*.xml,update/*.html", dest: "/"],
       ], "r7/desktop-apps/macos/build", "${s3prefix}/macos/${version}/${suffix}")
+
+    sh """#!/bin/bash -e
+      cd r7/desktop-apps/macos/build/update
+      md5 *.zip *.delta > md5sums.txt
+      shasum -a 256 *.zip *.delta > sha256sums.txt
+    """
+    uploadFiles("desktop", platform, [
+        [section: "Checksums", glob: "*.txt", dest: "/"],
+      ], "r7/desktop-apps/macos/build/update", "${s3prefix}/macos/${version}/${suffix}")
 
   } else if (platform ==~ /^linux.*/) {
 
@@ -935,15 +1009,18 @@ void buildDesktop(String platform) {
     sh "cd desktop-apps/win-linux/package/linux && \
       make clean && \
       make packages ${makeargs}"
+    String distPrefix = ""
+    if (platform == "linux_x86_64_u14") distPrefix = "/ubuntu14"
     uploadFiles("desktop", platform, [
         [section: "Ubuntu",   glob: "deb/*.deb",        dest: "/ubuntu/"  ],
         [section: "CentOS",   glob: "rpm/**/*.rpm",     dest: "/centos/"  ],
         [section: "AltLinux", glob: "apt-rpm/**/*.rpm", dest: "/altlinux/"],
         [section: "Rosa",     glob: "urpmi/**/*.rpm",   dest: "/rosa/"    ],
-        [section: "Portable", glob: "tar/**/*.tar.gz",  dest: "/linux/"   ],
+        [section: "SUSE Linux", glob: "suse-rpm/**/*.rpm", dest: "/suse/" ],
+        [section: "Portable", glob: "tar/*.tar.*",      dest: "/linux/"   ],
         [section: "AstraLinux Signed",
          glob: "deb-astra/*.deb", dest: "/astralinux/"]
-      ], "desktop-apps/win-linux/package/linux", s3prefix)
+      ], "desktop-apps/win-linux/package/linux", s3prefix + distPrefix)
 
   }
 }
@@ -951,51 +1028,77 @@ void buildDesktop(String platform) {
 void buildBuilder(String platform) {
   String version = "${env.PRODUCT_VERSION}-${env.BUILD_NUMBER}"
   String makeargs = ""
-  if (!branding.onlyoffice)
-    makeargs += " -e BRANDING_DIR=../${branding.repo}/document-builder-package"
 
   if (platform ==~ /^windows.*/) {
 
-    bat "cd document-builder-package && \
-      make clean && \
-      make packages ${makeargs}"
+    ArrayList targets = ['clean']
+    if (platform == 'windows_x64') targets += ['innosetup-x64', 'portable-x64']
+    if (platform == 'windows_x86') targets += ['innosetup-x86', 'portable-x86']
+    if (params.signing) targets += ['sign']
+    buildPackages("builder", platform, targets)
     uploadFiles("builder", platform, [
         [section: "Installer", glob: "exe/*.exe", dest: "/"],
         [section: "Portable",  glob: "zip/*.zip", dest: "/"]
       ], "document-builder-package", "${s3prefix}/windows/${version}/builder")
 
+  } else if (platform ==~ /^macos.*/) {
+
+    ArrayList targets = ['clean', 'builder']
+    String suffix
+    if (platform == "macos_x86_64") {
+      suffix = "x86_64"
+    } else if (platform == "macos_arm64") {
+      suffix = "arm"
+    }
+    sh """#!/bin/bash -e
+      rm -rfv document-builder-package/*.xz
+      cd build_tools/out/${platforms[platform].build}/r7-office/documentbuilder
+      tar --xz -cvf ../../../../../document-builder-package/r7-office-documentbuilder-${suffix}-${version}.tar.xz *
+    """
+    // buildPackages("builder", platform, targets)
+    uploadFiles("builder", platform, [
+        [section: "Portable",  glob: "*.xz", dest: "/"]
+      ], "document-builder-package", "${s3prefix}/macos/${version}/${suffix}")
+
   } else if (platform ==~ /^linux.*/) {
 
     if (platform == "linux_aarch64")
       makeargs += " -e UNAME_M=aarch64"
+    if (!branding.onlyoffice)
+      makeargs += " -e BRANDING_DIR=../${branding.repo}/document-builder-package"
     sh "cd document-builder-package && \
       make clean && \
       make packages ${makeargs}"
+    String distPrefix = ""
+    if (platform == "linux_x86_64_u14") distPrefix = "/ubuntu14"
     uploadFiles("builder", platform, [
         [section: "Ubuntu",   glob: "deb/*.deb",    dest: "/ubuntu/"],
         [section: "CentOS",   glob: "rpm/**/*.rpm", dest: "/centos/"],
         [section: "Portable", glob: "tar/*.tar.gz", dest: "/linux/" ]
-      ], "document-builder-package", s3prefix)
+      ], "document-builder-package", s3prefix + distPrefix)
 
   }
 }
 
 void buildServer(String platform, String edition='community') {
   String version = "${env.PRODUCT_VERSION}-${env.BUILD_NUMBER}"
-  String product, productName, makeargs = ""
+  String product, productName, productEdition, makeargs = ""
 
   switch(edition) {
     case "community":
       product = "server_ce"
       productName = "DocumentServer"
+      productEdition = ""
       break
     case "enterprise":
       product = "server_ee"
       productName = "DocumentServer-EE"
+      productEdition = "-ee"
       break
     case "developer":
       product = "server_de"
       productName = "DocumentServer-DE"
+      productEdition = "-de"
       break
   }
 
@@ -1021,15 +1124,17 @@ void buildServer(String platform, String edition='community') {
     sh "cd document-server-package && \
       make clean && \
       make packages ${makeargs}"
+    String distPrefix = ""
+    if (platform == "linux_x86_64_u14") distPrefix = "/ubuntu14"
     uploadFiles(product, platform, [
         [section: "Ubuntu",   glob: "deb/*.deb",        dest: "/ubuntu/"  ],
         [section: "CentOS",   glob: "rpm/**/*.rpm",     dest: "/centos/"  ],
         [section: "AltLinux", glob: "apt-rpm/**/*.rpm", dest: "/altlinux/"],
         [section: "Portable", glob: "*.tar.gz",         dest: "/linux/"   ]
-      ], "document-server-package", s3prefix)
+      ], "document-server-package", s3prefix + distPrefix)
 
     if (platform == "linux_x86_64") {
-      makeargs = "-e PRODUCT_NAME=${productName.toLowerCase()}"
+      makeargs = "-e PRODUCT_EDITION=${productEdition}"
       if (!branding.onlyoffice)
         makeargs += " -e ONLYOFFICE_VALUE=ds"
       sh "cd Docker-DocumentServer && \
@@ -1063,6 +1168,33 @@ void buildPackages(String product, String platform, ArrayList targets) {
     bat "cd build_tools && call python make_package.py ${args}"
 }
 
+/*
+void buildDocker() {
+  sh """
+    gh workflow run 4testing-build.yml \
+      --repo ONLYOFFICE/Docker-DocumentServer \
+      --ref \$BRANCH_NAME \
+      -f build=\$BUILD_NUMBER \
+      -f amd64=${params.linux_x86_64} \
+      -f arm64=${params.linux_aarch64} \
+      -f community=${params.server_ce} \
+      -f enterprise=${params.server_ee} \
+      -f developer=${params.server_de}
+  """
+}
+
+void checkDocker() {
+  sh """
+    REPO=ONLYOFFICE/Docker-DocumentServer
+    sleep 5
+    RUN_ID=\$(gh run list --repo \$REPO --workflow 4testing-build.yml \
+      --branch \$BRANCH_NAME --json databaseId --jq '.[0].databaseId')
+    gh --repo \$REPO run watch \$RUN_ID --interval 15 > /dev/null
+    gh --repo \$REPO run view \$RUN_ID --verbose --exit-status
+  """
+}
+*/
+
 // Upload
 
 void uploadFiles(String product, String platform, ArrayList items, \
@@ -1070,30 +1202,20 @@ void uploadFiles(String product, String platform, ArrayList items, \
   String srcPath, uploadCmd = ""
   ArrayList localListDeploy = []
 
-  Closure cmdMd5sum = {
-    if (platform ==~ /^windows.*/) {
-      return powershell (
-        script: "Get-FileHash ${it} -Algorithm MD5 | Select -ExpandProperty Hash",
-        returnStdout: true).trim()
-    } else if (platform ==~ /^macos.*/) {
-      return sh (script: "md5 -qs ${it}", returnStdout: true).trim()
-    } else {
-      return sh (script: "md5sum ${it} | cut -c -32", returnStdout: true).trim()
-    }
-  }
-
   dir(srcPrefix) {
     items.each { item ->
       findFiles(glob: item.glob).each { file ->
         srcPath = "${destPrefix}${item.dest}"
+        // srcMD5Sum = getMD5Sum(file.path, platform)
+        // println file.path + " " + srcMD5Sum
         localListDeploy.add([
           product: product,
           platform: platforms[platform].title,
           section: item.section,
           path: srcPath + file.name,
           file: file.name,
-          size: file.length,
-          md5: cmdMd5sum(file.path)
+          size: file.length
+          // md5: srcMD5Sum
           // sha256: cmdSha256sum(it.path)
         ])
         uploadCmd += "aws s3 cp --acl public-read --no-progress " \
@@ -1104,6 +1226,20 @@ void uploadFiles(String product, String platform, ArrayList items, \
   }
 
   listDeploy.addAll(localListDeploy)
+}
+
+def getMD5Sum(String file, String platform = "linux") {
+  String output
+  if (platform ==~ /^windows.*/) {
+    output = powershell(
+      script: "Get-FileHash ${file} -Algorithm MD5 | Select -ExpandProperty Hash",
+      returnStdout: true)
+  } else if (platform ==~ /^macos.*/) {
+    output = sh(script: "md5 -qs ${file}", returnStdout: true)
+  } else {
+    output = sh(script: "md5sum ${file} | cut -c -32", returnStdout: true)
+  }
+  return output.trim()
 }
 
 // Tests
@@ -1147,6 +1283,18 @@ void generateReports() {
 void publishReport(String title, Map files) {
   files.each {
     writeFile file: it.key, text: getHtml(it.value)
+    try {
+      withCredentials([
+        string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
+        string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
+      ]) {
+        sh "aws s3 cp --acl public-read --no-progress ${it.key} \
+          s3://${s3bucket}/${branding.company_lc}/reports/${env.BRANCH_NAME}/${env.BUILD_NUMBER}/"
+      }
+      echo "https://s3.${s3region}.amazonaws.com/${s3bucket}/${branding.company_lc}/reports/${env.BRANCH_NAME}/${env.BUILD_NUMBER}/${it.key}"
+    } catch(Exception e) {
+        echo "Caught: ${e}"
+    }
   }
   publishHTML([
     allowMissing: false,
@@ -1167,24 +1315,23 @@ def getHtml(ArrayList data) {
   }
 
   text = "<html>\n<head>" \
-    + "\n  <link rel=\"stylesheet\" href=\"https://unpkg.com/style.css\">" \
-    + "\n  <style type=\"text/css\">body { margin: 24px; }</style>" \
+    + "\n<link rel=\"stylesheet\" href=\"/userContent/style.css\">" \
+    + "\n<style type=\"text/css\">body { margin: 24px; }</style>" \
     + "\n<head>\n<body>"
   data.groupBy { it.platform }.sort().each { platform, sections ->
-    text += "\n  <h3>${platform}</h3>\n  <ul>"
+    text += "\n<h3>${platform}</h3>\n<ul>"
     sections.groupBy { it.section }.each { section, files ->
-      text += "\n    <li><b>${section}</b></li>\n    <ul>"
+      text += "\n<li><b>${section}</b></li>\n<ul>"
       files.each {
         url = "https://s3.${s3region}.amazonaws.com/${it.path}"
-        text += "\n      <li>" \
-          + "\n        <a href=\"${url}\">${it.file}</a>" \
-          + ", Size: ${size(it.size)}B" \
-          + ", MD5: <code>${it.md5}</code>" \
-          + "\n      </li>"
+        text += "\n<li>" \
+          + "\n<a href=\"${url}\">${it.file}</a> (${size(it.size)}B)" \
+          + "\n</li>"
+          // + ", MD5: <code>${it.md5}</code>" \
       }
-      text += "\n    </ul>"
+      text += "\n</ul>"
     }
-    text += "\n  </ul>"
+    text += "\n</ul>"
   }
   text += "\n</body>\n</html>"
 
@@ -1193,16 +1340,14 @@ def getHtml(ArrayList data) {
 
 // Notifications
 
-def getJobStats(String jobStatus) {
-  String text = "Build [${currentBuild.fullDisplayName}]" \
-    + "(${currentBuild.absoluteUrl}) ${jobStatus}"
-  stageStats.sort().each { stage, status ->
-    text += "\n${status ? '🔵' : '🔴'} ${stage.replaceAll('_','\\\\_')}"
+void sendTelegramMessage(String jobStatus, String chatId = '-1001773122025', Boolean markdown = true) {
+  String text = "Build [" + currentBuild.fullDisplayName \
+      + "](" + currentBuild.absoluteUrl + ") " + jobStatus
+  ArrayList icons = ["🟢", "🟡", "🔴"]
+  stageStats.sort().each { stage, code ->
+    text += "\n" + icons[code] + " " + stage.replaceAll('_','\\\\_')
   }
-  return text
-}
 
-void sendTelegramMessage(String text, String chatId, Boolean markdown = true) {
   if (params.notify) sh(
     label: "Send Telegram Message",
     script: "curl -X POST -s -S \
