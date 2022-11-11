@@ -70,6 +70,7 @@ pipeline {
   agent none
   environment {
     COMPANY_NAME = "R7-Office"
+    APPLICATION_NAME = "R7-Office"
     PUBLISHER_NAME = 'AO "R7"'
     PUBLISHER_URL = "http://r7-office.ru"
     SUPPORT_URL = "http://support.r7-office.ru"
