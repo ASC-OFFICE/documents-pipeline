@@ -142,9 +142,9 @@ pipeline {
     )
     // Linux
     booleanParam (
-      name:         'linux_x86_64',
+      name:         'linux_x86_64_u14',
       description:  'Build Linux x86-64 (Ubuntu 14) targets',
-      defaultValue: defaults.linux_x86_64
+      defaultValue: defaults.linux_x86_64_u14
     )
     /*
     booleanParam (
@@ -419,14 +419,14 @@ pipeline {
         stage('Linux x86_64 (Ubuntu 14)') {
           agent { label 'linux_x86_64' }
           when {
-            expression { params.linux_x86_64 }
+            expression { params.linux_x86_64_u14 }
             beforeAgent true
           }
           environment {
             GITHUB_TOKEN = credentials('github-token')
           }
           steps {
-            initializeLinux("linux_x86_64")
+            initializeLinux("linux_x86_64_u14")
           }
           post {
             success  { setStageStats(0) }
@@ -823,13 +823,11 @@ void buildArtifacts(String platform, String license = 'opensource') {
 void buildPackages(String platform, String license = 'opensource') {
   Boolean isOpenSource = license == "opensource"
   Boolean isCommercial = license == "commercial"
-  // Boolean pCore = platform in ["windows_x64", "windows_x86",
-  //                              "darwin_x86_64", "darwin_arm64",
-  //                              "linux_x86_64_u16"]
+  Boolean pCore = false
   Boolean pDesktop = !(platform in ["linux_aarch64", "android"])
-  Boolean pBuilder = platform in ["windows_x64", "linux_x86_64_u14", "linux_x86_64_u16", "linux_aarch64"]
-  Boolean pServer = platform in ["windows_x64", "linux_x86_64_u14", "linux_x86_64_u16", "linux_aarch64"]
-  Boolean pMobile = platform == "android"
+  Boolean pBuilder = platform in ["windows_x64", "linux_x86_64_u14", "linux_aarch64"]
+  Boolean pServer = platform in ["windows_x64", "linux_x86_64_u14", "linux_aarch64"]
+  Boolean pMobile = false
 
   ArrayList targets = []
   // if (params.core && isOpenSource && pCore)        targets.add("core")
@@ -862,19 +860,6 @@ void buildPackages(String platform, String license = 'opensource') {
     println platformDeployData
     deployData += platformDeployData
   }
-}
-
-void buildPackages(String product, String platform, ArrayList targets) {
-  String args = "--product ${product}" \
-    + " --version ${env.PRODUCT_VERSION}" \
-    + " --build ${env.BUILD_NUMBER}" \
-    + " --targets ${targets.join(' ')}"
-  if (!branding.onlyoffice)
-    args += " --branding ${branding.repo}"
-  if (platforms[platform].isUnix)
-    sh "cd build_tools && ./make_package.py ${args}"
-  else
-    bat "cd build_tools && call python make_package.py ${args}"
 }
 
 /*
