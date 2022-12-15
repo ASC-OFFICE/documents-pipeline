@@ -616,6 +616,19 @@ void initializeLinux(String platform) {
     buildArtifacts(platform, "commercial")
     buildPackages(platform, "commercial")
   }
+
+  ArrayList buildDockerServer = []
+  if (params.server_ee) dockerServerBuild.add("-ee")
+  if (params.server_de) dockerServerBuild.add("-de")
+  dockerServerBuild.each {
+    sh """
+      cd Docker-DocumentServer
+      make clean
+      make deploy -e PRODUCT_EDITION=${it} -e ONLYOFFICE_VALUE=ds \
+        -e PACKAGE_VERSION=\$PRODUCT_VERSION-\$BUILD_NUMBER~jessie \
+        -e PACKAGE_BASEURL=https://244617.selcdn.ru/\$S3_BUCKET/server/linux/debian/\$BUILD_CHANNEL
+    """
+  }
 }
 
 void initializeAndroid(String platform = "android") {
