@@ -85,6 +85,11 @@ pipeline {
     BUILD_CHANNEL = "${defaults.channel}"
     PRODUCT_VERSION = "${defaults.version}"
     TELEGRAM_TOKEN = credentials('telegram-bot-token')
+    S3_ENDPOINT_URL = "https://s3.storage.selcloud.ru"
+    S3_BUCKET = "test-repo-r7"
+    AWS_DEFAULT_REGION = "ru-1"
+    AWS_ACCESS_KEY_ID = credentials('aws-access-key-id')
+    AWS_SECRET_ACCESS_KEY = credentials('aws-secret-access-key')
   }
   options {
     checkoutToSubdirectory 'documents-pipeline'
@@ -940,9 +945,11 @@ void publishReport(String title, Map files) {
         string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
       ]) {
         sh """
-            aws s3 cp --acl public-read --no-progress ${it.key} s3://${s3bucket}/${branding.company_lc}/reports/${env.BRANCH_NAME}/${env.BUILD_NUMBER}/
-            aws s3 cp --acl public-read --no-progress ${it.key} s3://${s3bucket}/${branding.company_lc}/reports/${env.BRANCH_NAME}/latest/
-            echo https://s3.${s3region}.amazonaws.com/${s3bucket}/${branding.company_lc}/reports/${env.BRANCH_NAME}/${env.BUILD_NUMBER}/${it.key}
+            aws --endpoint-url=\$S3_ENDPOINT_URL s3 cp --no-progress --acl public-read \
+              ${it.key} s3://\$S3_BUCKET/reports/\$BRANCH_NAME/\$BUILD_NUMBER/
+            aws --endpoint-url=\$S3_ENDPOINT_URL s3 cp --no-progress --acl public-read \
+              ${it.key} s3://\$S3_BUCKET/reports/\$BRANCH_NAME/latest/
+            echo "https://244617.selcdn.ru/\$S3_BUCKET/reports/\$BRANCH_NAME/\$BUILD_NUMBER/${it.key}"
         """
       }
     } catch(Exception e) {
@@ -976,7 +983,7 @@ def getHtml(ArrayList data) {
       text += "\n<dt>${type}</dt>\n<dd>"
       files.each {
         title = it.key.minus(~/^.+\//)
-        url = "https://s3.${it.region}.amazonaws.com/${it.bucket}/${it.key}"
+        url = "https://244617.selcdn.ru/${it.bucket}/${it.key}"
         text += "\n<a href=\"${url}\">${title}</a> (${size(it.size)}B)<br>"
       }
       text += "\n</dd>"
