@@ -1277,12 +1277,17 @@ void publishReport(String title, Map files) {
         string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
         string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
       ]) {
-        sh "aws s3 cp --acl public-read --no-progress ${it.key} \
-              s3://${s3bucket}/${branding.company_lc}/reports/${env.BRANCH_NAME}/${env.BUILD_NUMBER}/ \
-            && aws s3 cp --acl public-read --no-progress ${it.key} \
-              s3://${s3bucket}/${branding.company_lc}/reports/${env.BRANCH_NAME}/latest/"
+        sh """
+            export AWS_DEFAULT_REGION=ru-1
+            REPORT_PATH=\$S3_BUCKET/reports/\$BRANCH_NAME
+            aws --endpoint-url=\$S3_ENDPOINT_URL s3 cp --no-progress \
+              --acl public-read ${it.key} s3://\$REPORT_PATH/\$BUILD_NUMBER/
+            echo "https://244617.selcdn.ru/\$REPORT_PATH/\$BUILD_NUMBER/${it.key}"
+            aws --endpoint-url=\$S3_ENDPOINT_URL s3 cp --no-progress \
+              --acl public-read ${it.key} s3://\$REPORT_PATH/latest/
+            echo "https://244617.selcdn.ru/\$REPORT_PATH/latest/${it.key}"
+        """
       }
-      echo "https://s3.${s3region}.amazonaws.com/${s3bucket}/${branding.company_lc}/reports/${env.BRANCH_NAME}/${env.BUILD_NUMBER}/${it.key}"
     } catch(Exception e) {
       echo "Caught: ${e}"
     }
