@@ -945,11 +945,13 @@ void publishReport(String title, Map files) {
         string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
       ]) {
         sh """
-            aws --endpoint-url=\$S3_ENDPOINT_URL s3 cp --no-progress --acl public-read \
-              ${it.key} s3://\$S3_BUCKET/reports/\$BRANCH_NAME/\$BUILD_NUMBER/
-            aws --endpoint-url=\$S3_ENDPOINT_URL s3 cp --no-progress --acl public-read \
-              ${it.key} s3://\$S3_BUCKET/reports/\$BRANCH_NAME/latest/
-            echo "https://244617.selcdn.ru/\$S3_BUCKET/reports/\$BRANCH_NAME/\$BUILD_NUMBER/${it.key}"
+            REPORT_PATH=\$S3_BUCKET/reports/\$BRANCH_NAME
+            aws --endpoint-url=\$S3_ENDPOINT_URL s3 cp --no-progress \
+              --acl public-read ${it.key} s3://\$REPORT_PATH/\$BUILD_NUMBER/
+            echo "https://244617.selcdn.ru/\$REPORT_PATH/\$BUILD_NUMBER/${it.key}"
+            aws --endpoint-url=\$S3_ENDPOINT_URL s3 cp --no-progress \
+              --acl public-read ${it.key} s3://\$REPORT_PATH/latest/
+            echo "https://244617.selcdn.ru/\$REPORT_PATH/latest/${it.key}"
         """
       }
     } catch(Exception e) {
