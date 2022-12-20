@@ -623,9 +623,9 @@ void initializeLinux(String platform) {
   }
 
   ArrayList buildDockerServer = []
-  if (params.server_ee) dockerServerBuild.add("-ee")
-  if (params.server_de) dockerServerBuild.add("-de")
-  dockerServerBuild.each {
+  if (params.server_ee) buildDockerServer.add("-ee")
+  if (params.server_de) buildDockerServer.add("-de")
+  buildDockerServer.each {
     sh """
       cd Docker-DocumentServer
       make clean
