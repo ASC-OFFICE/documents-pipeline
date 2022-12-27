@@ -24,8 +24,7 @@ defaults = [
   mobile:           false,
   password:         true,
   beta:             false,
-  test:             false,
-  sign:             true,
+  sign:             false,
   schedule:         'H 17 * * *'
 ]
 
@@ -85,6 +84,11 @@ pipeline {
     BUILD_CHANNEL = "${defaults.channel}"
     PRODUCT_VERSION = "${defaults.version}"
     TELEGRAM_TOKEN = credentials('telegram-bot-token')
+    S3_ENDPOINT_URL = "https://s3.storage.selcloud.ru"
+    S3_BUCKET = "test-repo-r7"
+    AWS_DEFAULT_REGION = "ru-1"
+    AWS_ACCESS_KEY_ID = credentials('aws-access-key-id')
+    AWS_SECRET_ACCESS_KEY = credentials('aws-secret-access-key')
   }
   options {
     checkoutToSubdirectory 'documents-pipeline'
@@ -142,9 +146,9 @@ pipeline {
     )
     // Linux
     booleanParam (
-      name:         'linux_x86_64',
+      name:         'linux_x86_64_u14',
       description:  'Build Linux x86-64 (Ubuntu 14) targets',
-      defaultValue: defaults.linux_x86_64
+      defaultValue: defaults.linux_x86_64_u14
     )
     /*
     booleanParam (
@@ -212,11 +216,6 @@ pipeline {
       name:         'beta',
       description:  'Beta (enabled anyway on develop)',
       defaultValue: defaults.beta
-    )
-    booleanParam (
-      name:         'test',
-      description:  'Run test (Only on Linux)',
-      defaultValue: defaults.test
     )
     booleanParam (
       name:         'signing',
@@ -419,14 +418,14 @@ pipeline {
         stage('Linux x86_64 (Ubuntu 14)') {
           agent { label 'linux_x86_64' }
           when {
-            expression { params.linux_x86_64 }
+            expression { params.linux_x86_64_u14 }
             beforeAgent true
           }
           environment {
             GITHUB_TOKEN = credentials('github-token')
           }
           steps {
-            initializeLinux("linux_x86_64")
+            initializeLinux("linux_x86_64_u14")
           }
           post {
             success  { setStageStats(0) }
@@ -616,6 +615,19 @@ void initializeLinux(String platform) {
     buildArtifacts(platform, "commercial")
     buildPackages(platform, "commercial")
   }
+
+  ArrayList buildDockerServer = []
+  if (params.server_ee) buildDockerServer.add("-ee")
+  if (params.server_de) buildDockerServer.add("-de")
+  buildDockerServer.each {
+    sh """
+      cd Docker-DocumentServer
+      make clean
+      make deploy -e PRODUCT_EDITION=${it} -e ONLYOFFICE_VALUE=ds \
+        -e PACKAGE_VERSION=\$PRODUCT_VERSION-\$BUILD_NUMBER~jessie \
+        -e PACKAGE_BASEURL=https://244617.selcdn.ru/\$S3_BUCKET/server/linux/debian/\$BUILD_CHANNEL
+    """
+  }
 }
 
 void initializeAndroid(String platform = "android") {
@@ -641,6 +653,7 @@ void checkoutRepo(
   int retryCount = 0
   retry(3) {
     if (retryCount > 0) sleep(30)
+    retryCount++
     checkout([
       $class: 'GitSCM',
       branches: [[name: 'refs/heads/' + branch]],
@@ -654,7 +667,6 @@ void checkoutRepo(
       submoduleCfg: [],
       userRemoteConfigs: [[url: "git@github.com:${repo}.git"]]
     ])
-    retryCount++
   }
 }
 
@@ -703,14 +715,19 @@ def getVarRepos(String branch, String platform, String branding) {
       tag: (line != "onlyoffice.github.io")
     ]
     if (branch != 'master') {
-      repo.branch = resolveScm(
-        source: [
-          $class: 'GitSCMSource',
-          remote: "git@github.com:${repo.owner}/${repo.name}.git",
-          traits: [[$class: 'jenkins.plugins.git.traits.BranchDiscoveryTrait']]
-        ],
-        targets: [branch, 'master']
-      ).branches[0].name
+      int retryCount = 0
+      retry(3) {
+        if (retryCount > 0) sleep(60)
+        retryCount++
+        repo.branch = resolveScm(
+          source: [
+            $class: 'GitSCMSource',
+            remote: "git@github.com:${repo.owner}/${repo.name}.git",
+            traits: [[$class: 'jenkins.plugins.git.traits.BranchDiscoveryTrait']]
+          ],
+          targets: [branch, 'master']
+        ).branches[0].name
+      }
     }
 
     repos.add(repo)
@@ -767,8 +784,6 @@ def getModules(String platform, String license = "any") {
 
 def getConfigArgs(String platform = 'native', String license = 'opensource') {
   ArrayList modules = getModules(platform, license)
-  if (platform.startsWith("win")) modules.add("tests")
-
   ArrayList args = []
   args.add("--module \"${modules.join(' ')}\"")
   args.add("--platform \"${platform}\"")
@@ -797,26 +812,28 @@ def getConfigArgs(String platform = 'native', String license = 'opensource') {
 
 void buildArtifacts(String platform, String license = 'opensource') {
   if (platforms[platform].isUnix) {
-    sh "cd build_tools && \
-      ./configure.py ${getConfigArgs(platforms[platform].build, license)} && \
-      ./make.py"
+    sh """
+      cd build_tools
+      ./configure.py ${getConfigArgs(platforms[platform].build, license)}
+      ./make.py
+    """
   } else {
-    bat "cd build_tools && \
-      call python configure.py ${getConfigArgs(platforms[platform].build, license)} && \
-      call python make.py"
+    bat """
+      cd build_tools
+      call python configure.py ${getConfigArgs(platforms[platform].build, license)}
+      call python make.py
+    """
   }
 }
 
 void buildPackages(String platform, String license = 'opensource') {
   Boolean isOpenSource = license == "opensource"
   Boolean isCommercial = license == "commercial"
-  // Boolean pCore = platform in ["windows_x64", "windows_x86",
-  //                              "darwin_x86_64", "darwin_arm64",
-  //                              "linux_x86_64_u16"]
+  Boolean pCore = false
   Boolean pDesktop = !(platform in ["linux_aarch64", "android"])
-  Boolean pBuilder = platform in ["windows_x64", "linux_x86_64_u14", "linux_x86_64_u16", "linux_aarch64"]
-  Boolean pServer = platform in ["windows_x64", "linux_x86_64_u14", "linux_x86_64_u16", "linux_aarch64"]
-  Boolean pMobile = platform == "android"
+  Boolean pBuilder = platform in ["windows_x64", "linux_x86_64_u14", "linux_aarch64"]
+  Boolean pServer = platform in ["windows_x64", "linux_x86_64_u14", "linux_aarch64"]
+  Boolean pMobile = false
 
   ArrayList targets = []
   // if (params.core && isOpenSource && pCore)        targets.add("core")
@@ -828,7 +845,7 @@ void buildPackages(String platform, String license = 'opensource') {
   // if (params.mobile && isOpenSource && pMobile)    targets.add("mobile")
   targets.add("clean")
   targets.add("deploy")
-  if (params.signing)                              targets.add("sign")
+  if (params.signing && platform.startsWith("windows")) targets.add("sign")
 
   String args = " --platform ${platform}"
   if (platform.startsWith("linux_x86_64"))
@@ -842,26 +859,13 @@ void buildPackages(String platform, String license = 'opensource') {
   if (platforms[platform].isUnix)
     sh "cd build_tools && ./make_package.py ${args}"
   else
-    bat "cd build_tools && make_package.py ${args}"
+    bat "cd build_tools && python make_package.py ${args}"
 
   if (fileExists('deploy.json')) {
     def platformDeployData = readJSON(file: 'deploy.json')
     println platformDeployData
     deployData += platformDeployData
   }
-}
-
-void buildPackages(String product, String platform, ArrayList targets) {
-  String args = "--product ${product}" \
-    + " --version ${env.PRODUCT_VERSION}" \
-    + " --build ${env.BUILD_NUMBER}" \
-    + " --targets ${targets.join(' ')}"
-  if (!branding.onlyoffice)
-    args += " --branding ${branding.repo}"
-  if (platforms[platform].isUnix)
-    sh "cd build_tools && ./make_package.py ${args}"
-  else
-    bat "cd build_tools && call python make_package.py ${args}"
 }
 
 /*
@@ -890,16 +894,6 @@ void checkDocker() {
   """
 }
 */
-
-// Tests
-
-void linuxTest() {
-  checkoutRepo([owner: 'ONLYOFFICE', name: 'doc-builder-testing'], 'master')
-  sh "docker rmi doc-builder-testing || true"
-  sh "cd doc-builder-testing && \
-    docker build --tag doc-builder-testing -f dockerfiles/debian-develop/Dockerfile . &&\
-    docker run --rm doc-builder-testing bundle exec parallel_rspec spec -n 2"
-}
 
 // Reports
 
@@ -942,9 +936,13 @@ void publishReport(String title, Map files) {
         string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
       ]) {
         sh """
-            aws s3 cp --acl public-read --no-progress ${it.key} s3://${s3bucket}/${branding.company_lc}/reports/${env.BRANCH_NAME}/${env.BUILD_NUMBER}/
-            aws s3 cp --acl public-read --no-progress ${it.key} s3://${s3bucket}/${branding.company_lc}/reports/${env.BRANCH_NAME}/latest/
-            echo https://s3.${s3region}.amazonaws.com/${s3bucket}/${branding.company_lc}/reports/${env.BRANCH_NAME}/${env.BUILD_NUMBER}/${it.key}
+          REPORT_PATH=\$S3_BUCKET/reports/\$BRANCH_NAME
+          aws --endpoint-url=\$S3_ENDPOINT_URL s3 cp --no-progress \
+            --acl public-read ${it.key} s3://\$REPORT_PATH/\$BUILD_NUMBER/
+          echo "https://244617.selcdn.ru/\$REPORT_PATH/\$BUILD_NUMBER/${it.key}"
+          aws --endpoint-url=\$S3_ENDPOINT_URL s3 cp --no-progress \
+            --acl public-read ${it.key} s3://\$REPORT_PATH/latest/
+          echo "https://244617.selcdn.ru/\$REPORT_PATH/latest/${it.key}"
         """
       }
     } catch(Exception e) {
@@ -978,7 +976,7 @@ def getHtml(ArrayList data) {
       text += "\n<dt>${type}</dt>\n<dd>"
       files.each {
         title = it.key.minus(~/^.+\//)
-        url = "https://s3.${it.region}.amazonaws.com/${it.bucket}/${it.key}"
+        url = "https://244617.selcdn.ru/${it.bucket}/${it.key}"
         text += "\n<a href=\"${url}\">${title}</a> (${size(it.size)}B)<br>"
       }
       text += "\n</dd>"
