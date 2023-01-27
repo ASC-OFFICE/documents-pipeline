@@ -24,7 +24,7 @@ defaults = [
   mobile:           false,
   password:         true,
   beta:             false,
-  sign:             false,
+  sign:             true,
   schedule:         'H 17 * * *'
 ]
 
