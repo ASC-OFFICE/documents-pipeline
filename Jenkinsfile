@@ -24,7 +24,7 @@ defaults = [
   mobile:           false,
   password:         true,
   beta:             false,
-  sign:             false,
+  sign:             true,
   schedule:         'H 17 * * *'
 ]
 
@@ -503,7 +503,7 @@ pipeline {
       steps {
         script {
           catchError(
-            buildResult: 'SUCCESS',
+            buildResult: 'UNSTABLE',
             stageResult: 'FAILURE',
             message: 'Docker build failure'
           ) {
@@ -760,9 +760,13 @@ void tagRepos(ArrayList repos, String tag) {
 def getModules(String platform, String license = "any") {
   Boolean isOpenSource = license in ["opensource", "any"]
   Boolean isCommercial = license in ["commercial", "any"]
-  Boolean pCore = platform in ["win_64", "win_32", "mac_64", "mac_arm64", "linux_64", "linux_arm64"]
+  Boolean pCore = platform in ["win_64", "win_32",
+                               "mac_64", "mac_arm64",
+                               "linux_64", "linux_arm64"]
   Boolean pDesktop = platform != "linux_arm64"
-  Boolean pBuilder = platform in ["win_64", "win_32", "linux_64", "linux_arm64"]
+  Boolean pBuilder = platform in ["win_64", "win_32",
+                                  "mac_64", "mac_arm64",
+                                  "linux_64", "linux_arm64"]
   Boolean pServer = platform in ["win_64", "linux_64", "linux_arm64"]
   Boolean pMobile = platform == "android"
 
@@ -831,8 +835,12 @@ void buildPackages(String platform, String license = 'opensource') {
   Boolean isCommercial = license == "commercial"
   Boolean pCore = false
   Boolean pDesktop = !(platform in ["linux_aarch64", "android"])
-  Boolean pBuilder = platform in ["windows_x64", "linux_x86_64_u14", "linux_aarch64"]
-  Boolean pServer = platform in ["windows_x64", "linux_x86_64_u14", "linux_aarch64"]
+  Boolean pBuilder = platform in ["windows_x64", "windows_x86",
+                                  "linux_x86_64_u14", "linux_x86_64_u16",
+                                  "linux_aarch64"]
+  Boolean pServer = platform in ["windows_x64",
+                                 "linux_x86_64_u14", "linux_x86_64_u16",
+                                 "linux_aarch64"]
   Boolean pMobile = false
 
   ArrayList targets = []
@@ -937,11 +945,11 @@ void publishReport(String title, Map files) {
       ]) {
         sh """
           REPORT_PATH=\$S3_BUCKET/reports/\$BRANCH_NAME
-          aws --endpoint-url=\$S3_ENDPOINT_URL s3 cp --no-progress \
-            --acl public-read ${it.key} s3://\$REPORT_PATH/\$BUILD_NUMBER/
+          aws --endpoint-url=\$S3_ENDPOINT_URL s3 cp --no-progress --acl public-read \
+            ${it.key} s3://\$REPORT_PATH/\$BUILD_NUMBER/
           echo "https://244617.selcdn.ru/\$REPORT_PATH/\$BUILD_NUMBER/${it.key}"
-          aws --endpoint-url=\$S3_ENDPOINT_URL s3 cp --no-progress \
-            --acl public-read ${it.key} s3://\$REPORT_PATH/latest/
+          aws --endpoint-url=\$S3_ENDPOINT_URL s3 cp --no-progress --acl public-read \
+            ${it.key} s3://\$REPORT_PATH/latest/
           echo "https://244617.selcdn.ru/\$REPORT_PATH/latest/${it.key}"
         """
       }
