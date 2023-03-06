@@ -836,7 +836,7 @@ void buildPackages(String platform, String license = 'opensource') {
   Boolean isOpenSource = license == "opensource"
   Boolean isCommercial = license == "commercial"
   Boolean pCore = false
-  Boolean pClosureMaps = true
+  Boolean pClosureMaps = platform == "linux_x86_64_u14"
   Boolean pDesktop = !(platform in ["linux_aarch64", "android"])
   Boolean pBuilder = platform in ["windows_x64", "windows_x86",
                                   "linux_x86_64_u14", "linux_x86_64_u16",
