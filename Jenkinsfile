@@ -86,6 +86,7 @@ pipeline {
     TELEGRAM_TOKEN = credentials('telegram-bot-token')
     S3_ENDPOINT_URL = "https://s3.storage.selcloud.ru"
     S3_BUCKET = "test-repo-r7"
+    S3_BASE_URL = "https://244617.selcdn.ru/test-repo-r7"
     AWS_DEFAULT_REGION = "ru-1"
     AWS_ACCESS_KEY_ID = credentials('aws-access-key-id')
     AWS_SECRET_ACCESS_KEY = credentials('aws-secret-access-key')
@@ -815,6 +816,7 @@ def getConfigArgs(String platform = 'native', String license = 'opensource') {
 }
 
 void buildArtifacts(String platform, String license = 'opensource') {
+  echo "${platform} ${license} build"
   if (platforms[platform].isUnix) {
     sh """
       cd build_tools
@@ -834,6 +836,7 @@ void buildPackages(String platform, String license = 'opensource') {
   Boolean isOpenSource = license == "opensource"
   Boolean isCommercial = license == "commercial"
   Boolean pCore = false
+  Boolean pClosureMaps = true
   Boolean pDesktop = !(platform in ["linux_aarch64", "android"])
   Boolean pBuilder = platform in ["windows_x64", "windows_x86",
                                   "linux_x86_64_u14", "linux_x86_64_u16",
@@ -845,6 +848,8 @@ void buildPackages(String platform, String license = 'opensource') {
 
   ArrayList targets = []
   // if (params.core && isOpenSource && pCore)        targets.add("core")
+  if (isOpenSource && pClosureMaps)                targets.add("closure-maps-os")
+  if (isCommercial && pClosureMaps)                targets.add("closure-maps-com")
   if (params.desktop && isCommercial && pDesktop)  targets.add("desktop")
   if (params.builder && isCommercial && pBuilder)  targets.add("builder")
   // if (params.server_ce && isOpenSource && pServer) targets.add("server-community")
@@ -856,8 +861,7 @@ void buildPackages(String platform, String license = 'opensource') {
   if (params.signing && platform.startsWith("windows")) targets.add("sign")
 
   String args = " --platform ${platform}"
-  if (platform.startsWith("linux_x86_64"))
-    args = " --platform linux_x86_64"
+  if (platform.startsWith("linux_x86_64")) args = " --platform linux_x86_64"
   args += " --targets ${targets.join(' ')}" \
         + " --version ${env.PRODUCT_VERSION}" \
         + " --build ${env.BUILD_NUMBER}"
@@ -944,13 +948,12 @@ void publishReport(String title, Map files) {
         string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
       ]) {
         sh """
-          REPORT_PATH=\$S3_BUCKET/reports/\$BRANCH_NAME
           aws --endpoint-url=\$S3_ENDPOINT_URL s3 cp --no-progress --acl public-read \
-            ${it.key} s3://\$REPORT_PATH/\$BUILD_NUMBER/
-          echo "https://244617.selcdn.ru/\$REPORT_PATH/\$BUILD_NUMBER/${it.key}"
+            ${it.key} s3://\$S3_BUCKET/reports/\$BRANCH_NAME/\$BUILD_NUMBER/
+          echo "\$S3_BASE_URL/reports/\$BRANCH_NAME/\$BUILD_NUMBER/${it.key}"
           aws --endpoint-url=\$S3_ENDPOINT_URL s3 cp --no-progress --acl public-read \
-            ${it.key} s3://\$REPORT_PATH/latest/
-          echo "https://244617.selcdn.ru/\$REPORT_PATH/latest/${it.key}"
+            ${it.key} s3://\$S3_BUCKET/reports/\$BRANCH_NAME/latest/
+          echo "\$S3_BASE_URL/reports/\$BRANCH_NAME/latest/${it.key}"
         """
       }
     } catch(Exception e) {
@@ -984,7 +987,7 @@ def getHtml(ArrayList data) {
       text += "\n<dt>${type}</dt>\n<dd>"
       files.each {
         title = it.key.minus(~/^.+\//)
-        url = "https://244617.selcdn.ru/${it.bucket}/${it.key}"
+        url = "${env.S3_BASE_URL}/${it.key}"
         text += "\n<a href=\"${url}\">${title}</a> (${size(it.size)}B)<br>"
       }
       text += "\n</dd>"
@@ -1004,8 +1007,7 @@ void setStageStats(int status, String stageName = env.STAGE_NAME) {
 
 void sendTelegramMessage(
   String jobStatus,
-  String chatId = '-1001773122025',
-  Boolean markdown = true
+  String chatId = '-1001773122025'
 ) {
   String text = "Build [" + currentBuild.fullDisplayName \
       + "](" + currentBuild.absoluteUrl + ") " + jobStatus
@@ -1018,7 +1020,7 @@ void sendTelegramMessage(
     label: "Send Telegram Message",
     script: "curl -X POST -s -S \
       -d chat_id=${chatId} \
-      ${markdown ? '-d parse_mode=markdown' : ''} \
+      -d parse_mode=markdown \
       -d disable_web_page_preview=true \
       --data-urlencode text='${text}' \
       https://api.telegram.org/bot\$TELEGRAM_TOKEN/sendMessage"
