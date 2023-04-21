@@ -12,7 +12,8 @@ defaults = [
   darwin_arm64:     true,
   linux_x86_64:     true,
   linux_x86_64_u14: true,
-  linux_x86_64_u16: false,
+  linux_x86_64_u16: true,
+  linux_x86_64_u16_cef107: true,
   linux_aarch64:    false,
   android:          false,
   core:             false,
@@ -66,6 +67,7 @@ platforms = [
   linux_x86_64:     [title: "Linux x86_64",    build: "linux_64",    isUnix: true ],
   linux_x86_64_u14: [title: "Linux x86_64 (Ubuntu 14)", build: "linux_64", isUnix: true ],
   linux_x86_64_u16: [title: "Linux x86_64 (Ubuntu 16)", build: "linux_64", isUnix: true ],
+  linux_x86_64_u16_cef107: [title: "Linux x86_64 (Ubuntu 16, cef107)", build: "linux_64", isUnix: true ],
   linux_aarch64:    [title: "Linux aarch64",   build: "linux_arm64", isUnix: true ],
   android:          [title: "Android",         build: "android",     isUnix: true ]
 ]
@@ -86,6 +88,7 @@ pipeline {
     TELEGRAM_TOKEN = credentials('telegram-bot-token')
     S3_ENDPOINT_URL = "https://s3.storage.selcloud.ru"
     S3_BUCKET = "test-repo-r7"
+    S3_BASE_URL = "https://244617.selcdn.ru/test-repo-r7"
     AWS_DEFAULT_REGION = "ru-1"
     AWS_ACCESS_KEY_ID = credentials('aws-access-key-id')
     AWS_SECRET_ACCESS_KEY = credentials('aws-secret-access-key')
@@ -145,17 +148,24 @@ pipeline {
       defaultValue: defaults.darwin_arm64
     )
     // Linux
+    /*
     booleanParam (
       name:         'linux_x86_64_u14',
       description:  'Build Linux x86-64 (Ubuntu 14) targets',
       defaultValue: defaults.linux_x86_64_u14
     )
-    /*
+    */
     booleanParam (
       name:         'linux_x86_64_u16',
       description:  'Build Linux x86-64 (Ubuntu 16) targets',
       defaultValue: defaults.linux_x86_64_u16
     )
+    booleanParam (
+      name:         'linux_x86_64_u16_cef107',
+      description:  'Build Linux x86-64 (Ubuntu 16, cef107) targets',
+      defaultValue: defaults.linux_x86_64_u16_cef107
+    )
+    /*
     booleanParam (
       name:         'linux_aarch64',
       description:  'Build Linux aarch64 targets',
@@ -415,6 +425,7 @@ pipeline {
           }
         }
         // Linux
+        /*
         stage('Linux x86_64 (Ubuntu 14)') {
           agent { label 'linux_x86_64' }
           when {
@@ -423,6 +434,13 @@ pipeline {
           }
           environment {
             GITHUB_TOKEN = credentials('github-token')
+            TAR_RELEASE_SUFFIX = "gcc4"
+            DEB_RELEASE_SUFFIX = "jessie"
+            DEB_ASTRA_RELEASE_SUFFIX = "alse"
+            RPM_RELEASE_SUFFIX = "el7"
+            SUSE_RPM_RELEASE_SUFFIX = "suse12"
+            APT_RPM_RELEASE_SUFFIX = "p7"
+            URPMI_RELEASE = "r6"
           }
           steps {
             initializeLinux("linux_x86_64_u14")
@@ -433,7 +451,7 @@ pipeline {
             failure  { setStageStats(2) }
           }
         }
-        /*
+        */
         stage('Linux x86_64 (Ubuntu 16)') {
           agent { label 'linux_x86_64_u16' }
           when {
@@ -442,6 +460,13 @@ pipeline {
           }
           environment {
             GITHUB_TOKEN = credentials('github-token')
+            // TAR_RELEASE_SUFFIX = "gcc5"
+            // DEB_RELEASE_SUFFIX = "stretch"
+            DEB_ASTRA_RELEASE_SUFFIX = "alse"
+            RPM_RELEASE_SUFFIX = "el7"
+            SUSE_RPM_RELEASE_SUFFIX = "suse15"
+            APT_RPM_RELEASE_SUFFIX = "p8"
+            URPMI_RELEASE = "r9"
           }
           steps {
             initializeLinux("linux_x86_64_u16")
@@ -452,11 +477,47 @@ pipeline {
             failure  { setStageStats(2) }
           }
         }
-        stage('Linux aarch64') {
+        stage('Linux x86_64 (Ubuntu 16, cef107)') {
+          agent { label 'linux_x86_64_u16_cef107' }
+          when {
+            expression { params.linux_x86_64_u16_cef107 }
+            beforeAgent true
+          }
+          environment {
+            GITHUB_TOKEN = credentials('github-token')
+            TAR_RELEASE_SUFFIX = "cef107"
+            DEB_RELEASE_SUFFIX = "cef107"
+            DEB_ASTRA_RELEASE_SUFFIX = "alse-cef107"
+            RPM_RELEASE_SUFFIX = "el7.cef107"
+            SUSE_RPM_RELEASE_SUFFIX = "suse15.cef107"
+            APT_RPM_RELEASE_SUFFIX = "p8.cef107"
+            URPMI_RELEASE = "r9.cef107"
+            USE_CEF107 = '1'
+          }
+          steps {
+            initializeLinux("linux_x86_64_u16_cef107")
+          }
+          post {
+            success  { setStageStats(0) }
+            unstable { setStageStats(1) }
+            failure  { setStageStats(2) }
+          }
+        }
+        /*
+        stage('Linux aarch64 (Ubuntu 16)') {
           agent { label 'linux_aarch64' }
           when {
             expression { params.linux_aarch64 }
             beforeAgent true
+          }
+          environment {
+            // TAR_RELEASE_SUFFIX = "gcc5"
+            // DEB_RELEASE_SUFFIX = "stretch"
+            DEB_ASTRA_RELEASE_SUFFIX = "alse"
+            RPM_RELEASE_SUFFIX = "el7"
+            SUSE_RPM_RELEASE_SUFFIX = "suse15"
+            APT_RPM_RELEASE_SUFFIX = "p8"
+            URPMI_RELEASE = "r9"
           }
           steps {
             initializeLinux("linux_aarch64")
@@ -611,9 +672,16 @@ void initializeLinux(String platform) {
   ArrayList allRepos = constRepos.plus(varRepos)
   checkoutRepos(varRepos)
 
-  if (params.desktop || params.builder || params.server_ee || params.server_de) {
-    buildArtifacts(platform, "commercial")
-    buildPackages(platform, "commercial")
+  if (platform != "linux_x86_64_u16_cef107") {
+    if (params.desktop || params.builder || params.server_ee || params.server_de) {
+      buildArtifacts(platform, "commercial")
+      buildPackages(platform, "commercial")
+    }
+  } else {
+    if (params.desktop) {
+      buildArtifacts(platform, "commercial")
+      buildPackages(platform, "commercial")
+    }
   }
 
   ArrayList buildDockerServer = []
@@ -802,6 +870,8 @@ def getConfigArgs(String platform = 'native', String license = 'opensource') {
     args.add("--vs-version 2019")
   if (platform == "mac_64" && env.USE_V8 == "1")
     args.add("--config use_v8")
+  if (platform == "linux_64" && env.USE_CEF107 == "1")
+    args.add("--config cef_version_107")
   if (platform == "android")
     args.add("--config release")
   if (params.password_protection)
@@ -815,14 +885,16 @@ def getConfigArgs(String platform = 'native', String license = 'opensource') {
 }
 
 void buildArtifacts(String platform, String license = 'opensource') {
+  echo "${platform} ${license} build"
+  String label = "artifacts ${license}".toUpperCase()
   if (platforms[platform].isUnix) {
-    sh """
+    sh label: label, script: """
       cd build_tools
       ./configure.py ${getConfigArgs(platforms[platform].build, license)}
       ./make.py
     """
   } else {
-    bat """
+    bat label: label, script: """
       cd build_tools
       call python configure.py ${getConfigArgs(platforms[platform].build, license)}
       call python make.py
@@ -834,6 +906,7 @@ void buildPackages(String platform, String license = 'opensource') {
   Boolean isOpenSource = license == "opensource"
   Boolean isCommercial = license == "commercial"
   Boolean pCore = false
+  Boolean pClosureMaps = platform == "linux_x86_64_u16"
   Boolean pDesktop = !(platform in ["linux_aarch64", "android"])
   Boolean pBuilder = platform in ["windows_x64", "windows_x86",
                                   "linux_x86_64_u14", "linux_x86_64_u16",
@@ -845,6 +918,8 @@ void buildPackages(String platform, String license = 'opensource') {
 
   ArrayList targets = []
   // if (params.core && isOpenSource && pCore)        targets.add("core")
+  if (isOpenSource && pClosureMaps)                targets.add("closure-maps-os")
+  if (isCommercial && pClosureMaps)                targets.add("closure-maps-com")
   if (params.desktop && isCommercial && pDesktop)  targets.add("desktop")
   if (params.builder && isCommercial && pBuilder)  targets.add("builder")
   // if (params.server_ce && isOpenSource && pServer) targets.add("server-community")
@@ -856,18 +931,18 @@ void buildPackages(String platform, String license = 'opensource') {
   if (params.signing && platform.startsWith("windows")) targets.add("sign")
 
   String args = " --platform ${platform}"
-  if (platform.startsWith("linux_x86_64"))
-    args = " --platform linux_x86_64"
+  if (platform.startsWith("linux_x86_64")) args = " --platform linux_x86_64"
   args += " --targets ${targets.join(' ')}" \
         + " --version ${env.PRODUCT_VERSION}" \
         + " --build ${env.BUILD_NUMBER}"
   if (!branding.onlyoffice)
     args += " --branding ${branding.repo}"
 
+  String label = "packages ${license}".toUpperCase()
   if (platforms[platform].isUnix)
-    sh "cd build_tools && ./make_package.py ${args}"
+    sh label: label, script: "cd build_tools && ./make_package.py ${args}"
   else
-    bat "cd build_tools && python make_package.py ${args}"
+    bat label: label, script: "cd build_tools && python make_package.py ${args}"
 
   if (fileExists('deploy.json')) {
     def platformDeployData = readJSON(file: 'deploy.json')
@@ -933,6 +1008,20 @@ void generateReports() {
   }
   if (mobile)
     publishReport("Mobile", ["mobile.html": deploy.mobile])
+
+  currentBuild.description = ""
+  Map links = [:]
+  if (core)      links["Core"] = "core.html"
+  if (desktop)   links["DesktopEditors"] = "desktop.html"
+  if (builder)   links["DocumentBuilder"] = "builder.html"
+  if (server_ce) links["DocumentServer CE"] = "server_community.html"
+  if (server_de) links["DocumentServer DE"] = "server_developer.html"
+  if (server_ee) links["DocumentServer EE"] = "server_enterprise.html"
+  if (mobile)    links["Mobile"] = "mobile.html"
+  links.each {
+    if (!currentBuild.description.isEmpty()) currentBuild.description += " / "
+    currentBuild.description += "<a href=\"https://s3.eu-west-1.amazonaws.com/${env.S3_BUCKET}/reports/${env.BRANCH_NAME}/${env.BUILD_NUMBER}/${it.value}\" target=\"_blank\">${it.key}</a>"
+  }
 }
 
 void publishReport(String title, Map files) {
@@ -944,29 +1033,28 @@ void publishReport(String title, Map files) {
         string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
       ]) {
         sh """
-          REPORT_PATH=\$S3_BUCKET/reports/\$BRANCH_NAME
           aws --endpoint-url=\$S3_ENDPOINT_URL s3 cp --no-progress --acl public-read \
-            ${it.key} s3://\$REPORT_PATH/\$BUILD_NUMBER/
-          echo "https://244617.selcdn.ru/\$REPORT_PATH/\$BUILD_NUMBER/${it.key}"
+            ${it.key} s3://\$S3_BUCKET/reports/\$BRANCH_NAME/\$BUILD_NUMBER/
+          echo "\$S3_BASE_URL/reports/\$BRANCH_NAME/\$BUILD_NUMBER/${it.key}"
           aws --endpoint-url=\$S3_ENDPOINT_URL s3 cp --no-progress --acl public-read \
-            ${it.key} s3://\$REPORT_PATH/latest/
-          echo "https://244617.selcdn.ru/\$REPORT_PATH/latest/${it.key}"
+            ${it.key} s3://\$S3_BUCKET/reports/\$BRANCH_NAME/latest/
+          echo "\$S3_BASE_URL/reports/\$BRANCH_NAME/latest/${it.key}"
         """
       }
     } catch(Exception e) {
       echo "Caught: ${e}"
     }
   }
-  publishHTML([
-    allowMissing: false,
-    alwaysLinkToLastBuild: true,
-    includes: files.collect({ it.key }).join(','),
-    keepAll: true,
-    reportDir: '',
-    reportFiles: files.collect({ it.key }).join(','),
-    reportName: title,
-    reportTitles: ''
-  ])
+  // publishHTML([
+  //   allowMissing: false,
+  //   alwaysLinkToLastBuild: true,
+  //   includes: files.collect({ it.key }).join(','),
+  //   keepAll: true,
+  //   reportDir: '',
+  //   reportFiles: files.collect({ it.key }).join(','),
+  //   reportName: title,
+  //   reportTitles: ''
+  // ])
 }
 
 def getHtml(ArrayList data) {
@@ -976,6 +1064,7 @@ def getHtml(ArrayList data) {
   }
 
   text = "<html>\n<head>" \
+    + "\n<title>${env.BRANCH_NAME} - ${env.BUILD_NUMBER}</title>" \
     + "\n<link rel=\"stylesheet\" href=\"https://unpkg.com/@primer/css@20.4.1/dist/primer.css\">" \
     + "\n</head>\n<body><div class=\"container-lg px-3 my-5 markdown-body\">"
   data.groupBy { it.platform }.sort().each { platform, types ->
@@ -984,7 +1073,7 @@ def getHtml(ArrayList data) {
       text += "\n<dt>${type}</dt>\n<dd>"
       files.each {
         title = it.key.minus(~/^.+\//)
-        url = "https://244617.selcdn.ru/${it.bucket}/${it.key}"
+        url = "${env.S3_BASE_URL}/${it.key}"
         text += "\n<a href=\"${url}\">${title}</a> (${size(it.size)}B)<br>"
       }
       text += "\n</dd>"
@@ -1004,8 +1093,7 @@ void setStageStats(int status, String stageName = env.STAGE_NAME) {
 
 void sendTelegramMessage(
   String jobStatus,
-  String chatId = '-1001773122025',
-  Boolean markdown = true
+  String chatId = '-1001773122025'
 ) {
   String text = "Build [" + currentBuild.fullDisplayName \
       + "](" + currentBuild.absoluteUrl + ") " + jobStatus
@@ -1018,7 +1106,7 @@ void sendTelegramMessage(
     label: "Send Telegram Message",
     script: "curl -X POST -s -S \
       -d chat_id=${chatId} \
-      ${markdown ? '-d parse_mode=markdown' : ''} \
+      -d parse_mode=markdown \
       -d disable_web_page_preview=true \
       --data-urlencode text='${text}' \
       https://api.telegram.org/bot\$TELEGRAM_TOKEN/sendMessage"
