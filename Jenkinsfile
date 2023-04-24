@@ -684,17 +684,19 @@ void initializeLinux(String platform) {
     }
   }
 
-  ArrayList buildDockerServer = []
-  if (params.server_ee) buildDockerServer.add("-ee")
-  if (params.server_de) buildDockerServer.add("-de")
-  buildDockerServer.each {
-    sh """
-      cd Docker-DocumentServer
-      make clean
-      make deploy -e PRODUCT_EDITION=${it} -e ONLYOFFICE_VALUE=ds \
-        -e PACKAGE_VERSION=\$PRODUCT_VERSION-\$BUILD_NUMBER~jessie \
-        -e PACKAGE_BASEURL=https://244617.selcdn.ru/\$S3_BUCKET/server/linux/debian/\$BUILD_CHANNEL
-    """
+  if (platform != "linux_x86_64_u16_cef107") {
+    ArrayList buildDockerServer = []
+    if (params.server_ee) buildDockerServer.add("-ee")
+    if (params.server_de) buildDockerServer.add("-de")
+    buildDockerServer.each {
+      sh label: "DOCKER DOCUMENTSERVER-" + it.toUpperCase(), script: """
+        cd Docker-DocumentServer
+        make clean
+        make deploy -e PRODUCT_EDITION=${it} -e ONLYOFFICE_VALUE=ds \
+          -e PACKAGE_VERSION=\$PRODUCT_VERSION-\$BUILD_NUMBER \
+          -e PACKAGE_BASEURL=\$S3_BASE_URL/server/linux/debian/\$BUILD_CHANNEL
+      """
+    }
   }
 }
 
