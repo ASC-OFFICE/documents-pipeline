@@ -689,12 +689,12 @@ void initializeLinux(String platform) {
     if (params.server_ee) buildDockerServer.add("-ee")
     if (params.server_de) buildDockerServer.add("-de")
     buildDockerServer.each {
-      sh label: "DOCKER DOCUMENTSERVER-" + it.toUpperCase(), script: """
+      sh label: "DOCKER DOCUMENTSERVER" + it.toUpperCase(), script: """
         cd Docker-DocumentServer
         make clean
         make deploy -e PRODUCT_EDITION=${it} -e ONLYOFFICE_VALUE=ds \
           -e PACKAGE_VERSION=\$PRODUCT_VERSION-\$BUILD_NUMBER \
-          -e PACKAGE_BASEURL=\$S3_BASE_URL/server/linux/debian/\$BUILD_CHANNEL
+          -e PACKAGE_BASEURL=\$S3_BASE_URL/server/linux/debian
       """
     }
   }
