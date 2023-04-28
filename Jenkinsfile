@@ -11,8 +11,8 @@ defaults = [
   darwin_arm64:     true,
   darwin_x86_64_v8: false,
   linux_x86_64:     true,
-  linux_x86_64_cef: true,
   linux_aarch64:    false,
+  linux_x86_64_cef: true,
   android:          false,
   core:             false,
   desktop:          true,
@@ -135,11 +135,6 @@ pipeline {
       description:  'Build Linux x86-64 targets',
       defaultValue: defaults.linux_x86_64
     )
-    booleanParam (
-      name:         'linux_x86_64_cef',
-      description:  'Build Linux x86-64 cef107 targets',
-      defaultValue: defaults.linux_x86_64_cef
-    )
     /*
     booleanParam (
       name:         'linux_aarch64',
@@ -147,6 +142,11 @@ pipeline {
       defaultValue: defaults.linux_aarch64
     )
     */
+    booleanParam (
+      name:         'linux_x86_64_cef',
+      description:  'Build Linux x86-64 cef107 targets',
+      defaultValue: defaults.linux_x86_64_cef
+    )
     // Android
     /*
     booleanParam (
@@ -425,32 +425,6 @@ pipeline {
             failure  { setStageStats(2) }
           }
         }
-        stage('Linux x86_64 cef107') {
-          agent { label 'linux_x86_64_cef' }
-          when {
-            expression { params.linux_x86_64_cef }
-            beforeAgent true
-          }
-          environment {
-            GITHUB_TOKEN = credentials('github-token')
-            TAR_RELEASE_SUFFIX = "cef107"
-            DEB_RELEASE_SUFFIX = "cef107"
-            DEB_ASTRA_RELEASE_SUFFIX = "alse-cef107"
-            RPM_RELEASE_SUFFIX = "el7.cef107"
-            SUSE_RPM_RELEASE_SUFFIX = "suse15.cef107"
-            APT_RPM_RELEASE_SUFFIX = "p8.cef107"
-            URPMI_RELEASE = "r9.cef107"
-            USE_CEF107 = '1'
-          }
-          steps {
-            initializeLinux("linux_x86_64_cef")
-          }
-          post {
-            success  { setStageStats(0) }
-            unstable { setStageStats(1) }
-            failure  { setStageStats(2) }
-          }
-        }
         /*
         stage('Linux aarch64') {
           agent { label 'linux_aarch64' }
@@ -477,6 +451,32 @@ pipeline {
           }
         }
         */
+        stage('Linux x86_64 cef107') {
+          agent { label 'linux_x86_64_cef' }
+          when {
+            expression { params.linux_x86_64_cef }
+            beforeAgent true
+          }
+          environment {
+            GITHUB_TOKEN = credentials('github-token')
+            TAR_RELEASE_SUFFIX = "cef107"
+            DEB_RELEASE_SUFFIX = "cef107"
+            DEB_ASTRA_RELEASE_SUFFIX = "alse-cef107"
+            RPM_RELEASE_SUFFIX = "el7.cef107"
+            SUSE_RPM_RELEASE_SUFFIX = "suse15.cef107"
+            APT_RPM_RELEASE_SUFFIX = "p8.cef107"
+            URPMI_RELEASE = "r9.cef107"
+            USE_CEF107 = '1'
+          }
+          steps {
+            initializeLinux("linux_x86_64_cef")
+          }
+          post {
+            success  { setStageStats(0) }
+            unstable { setStageStats(1) }
+            failure  { setStageStats(2) }
+          }
+        }
         // Android
         /*
         stage('Android') {
@@ -565,8 +565,8 @@ String platformBuild(String platform) {
     darwin_arm64:     "mac_arm64",
     darwin_x86_64_v8: "mac_64",
     linux_x86_64:     "linux_64",
-    linux_x86_64_cef: "linux_64",
     linux_aarch64:    "linux_arm64",
+    linux_x86_64_cef: "linux_64",
     android:          "android",
   ][platform]
 }
