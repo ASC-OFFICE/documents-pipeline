@@ -640,12 +640,20 @@ void initializeLinux(String platform) {
   ArrayList allRepos = constRepos.plus(varRepos)
   checkoutRepos(varRepos)
 
-  if (platform == "linux_x86_64") {
+  if (platform in ["linux_x86_64", "linux_aarch64"]) {
     if (params.desktop || params.builder || params.server_ee || params.server_de) {
       buildArtifacts(platform, "commercial")
       buildPackages(platform, "commercial")
     }
+  }
+  if (platform == "linux_x86_64_cef") {
+    if (params.desktop) {
+      buildArtifacts(platform, "commercial")
+      buildPackages(platform, "commercial")
+    }
+  }
 
+  if (platform == "linux_x86_64") {
     ArrayList buildDockerServer = []
     if (params.server_ee) buildDockerServer.add("-ee")
     if (params.server_de) buildDockerServer.add("-de")
@@ -657,13 +665,6 @@ void initializeLinux(String platform) {
           -e PACKAGE_VERSION=\$PRODUCT_VERSION-\$BUILD_NUMBER \
           -e PACKAGE_BASEURL=\$S3_BASE_URL/server/linux/debian
       """
-    }
-  }
-
-  if (platform == "linux_x86_64_cef") {
-    if (params.desktop) {
-      buildArtifacts(platform, "commercial")
-      buildPackages(platform, "commercial")
     }
   }
 }
