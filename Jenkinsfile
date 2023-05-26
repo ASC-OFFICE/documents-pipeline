@@ -408,13 +408,12 @@ pipeline {
           }
           environment {
             GITHUB_TOKEN = credentials('github-token')
-            // TAR_RELEASE_SUFFIX = "gcc5"
-            // DEB_RELEASE_SUFFIX = "stretch"
-            DEB_ASTRA_RELEASE_SUFFIX = "alse"
-            RPM_RELEASE_SUFFIX = "el7"
-            SUSE_RPM_RELEASE_SUFFIX = "suse15"
-            APT_RPM_RELEASE_SUFFIX = "p8"
-            URPMI_RELEASE = "r9"
+            // TAR_RELEASE_SUFFIX = "-gcc5"
+            // DEB_RELEASE_SUFFIX = "~stretch"
+            DEB_ASTRA_RELEASE_SUFFIX = "~alse"
+            RPM_RELEASE_SUFFIX = ".el7"
+            APT_RPM_RELEASE_SUFFIX = ".p8"
+            URPMI_RELEASE = ".r9"
           }
           steps {
             initializeLinux("linux_x86_64")
@@ -433,13 +432,12 @@ pipeline {
             beforeAgent true
           }
           environment {
-            // TAR_RELEASE_SUFFIX = "gcc5"
-            // DEB_RELEASE_SUFFIX = "stretch"
-            DEB_ASTRA_RELEASE_SUFFIX = "alse"
-            RPM_RELEASE_SUFFIX = "el7"
-            SUSE_RPM_RELEASE_SUFFIX = "suse15"
-            APT_RPM_RELEASE_SUFFIX = "p8"
-            URPMI_RELEASE = "r9"
+            // TAR_RELEASE_SUFFIX = "-gcc5"
+            // DEB_RELEASE_SUFFIX = "~stretch"
+            DEB_ASTRA_RELEASE_SUFFIX = "~alse"
+            RPM_RELEASE_SUFFIX = ".el7"
+            APT_RPM_RELEASE_SUFFIX = ".p8"
+            URPMI_RELEASE = ".r9"
           }
           steps {
             initializeLinux("linux_aarch64")
@@ -459,13 +457,12 @@ pipeline {
           }
           environment {
             GITHUB_TOKEN = credentials('github-token')
-            TAR_RELEASE_SUFFIX = "cef107"
-            DEB_RELEASE_SUFFIX = "cef107"
-            DEB_ASTRA_RELEASE_SUFFIX = "alse-cef107"
-            RPM_RELEASE_SUFFIX = "el7.cef107"
-            SUSE_RPM_RELEASE_SUFFIX = "suse15.cef107"
-            APT_RPM_RELEASE_SUFFIX = "p8.cef107"
-            URPMI_RELEASE = "r9.cef107"
+            TAR_RELEASE_SUFFIX = "-cef107"
+            DEB_RELEASE_SUFFIX = "~cef107"
+            DEB_ASTRA_RELEASE_SUFFIX = "~alse-cef107"
+            RPM_RELEASE_SUFFIX = "~cef107.el7"
+            APT_RPM_RELEASE_SUFFIX = "~cef107.p8"
+            URPMI_RELEASE = "~cef107.r9"
             USE_CEF107 = '1'
           }
           steps {
@@ -997,7 +994,7 @@ void generateReports() {
 
 void publishReport(String title, Map files) {
   files.each {
-    writeFile file: it.key, text: getHtml(it.value)
+    writeFile file: it.key, text: getHtml(title, it.value)
     try {
       withCredentials([
         string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
@@ -1028,14 +1025,15 @@ void publishReport(String title, Map files) {
   // ])
 }
 
-def getHtml(ArrayList data) {
+def getHtml(String product, ArrayList data) {
   String text, url
   Closure size = {
     return sh (script: "LANG=C numfmt --to=iec-i ${it}", returnStdout: true).trim()
   }
 
   text = "<html>\n<head>" \
-    + "\n<title>${env.BRANCH_NAME} - ${env.BUILD_NUMBER}</title>" \
+    + "\n<title>${env.COMPANY_NAME} - ${product} - ${env.BRANCH_NAME} - ${env.BUILD_NUMBER}</title>" \
+    + "\n<link rel=\"shortcut icon\" href=\"https://static.tildacdn.com/tild3439-3939-4930-a436-313930366363/favicon.ico\" type=\"image/x-icon\">" \
     + "\n<link rel=\"stylesheet\" href=\"https://unpkg.com/@primer/css@20.4.1/dist/primer.css\">" \
     + "\n</head>\n<body><div class=\"container-lg px-3 my-5 markdown-body\">"
   data.groupBy { it.platform }.sort().each { platform, types ->
