@@ -1027,15 +1027,18 @@ void publishReport(String title, Map files) {
 
 def getHtml(String product, ArrayList data) {
   String text, url
+  String now = new Date().format("yyyy-MM-dd HH:mm")
   Closure size = {
     return sh (script: "LANG=C numfmt --to=iec-i ${it}", returnStdout: true).trim()
   }
 
   text = "<html>\n<head>" \
-    + "\n<title>${env.COMPANY_NAME} - ${product} - ${env.BRANCH_NAME} - ${env.BUILD_NUMBER}</title>" \
-    + "\n<link rel=\"shortcut icon\" href=\"https://static.tildacdn.com/tild3439-3939-4930-a436-313930366363/favicon.ico\" type=\"image/x-icon\">" \
-    + "\n<link rel=\"stylesheet\" href=\"https://unpkg.com/@primer/css@20.4.1/dist/primer.css\">" \
-    + "\n</head>\n<body><div class=\"container-lg px-3 my-5 markdown-body\">"
+    + "\n<title>${env.COMPANY_NAME} ${product} - ${env.BRANCH_NAME} - ${env.BUILD_NUMBER}</title>" \
+    + '\n<link rel="shortcut icon" sizes="16x16" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABmJLR0QA/wD/AP+gvaeTAAABw0lEQVQ4jb2RIWxTQRzGv//dvfYlmElcrw4B2cQS5tY3ErIMwRAIVEEgpibQpH2ZwY2JsQTTzYFrSQgJ5oZAIZ5hKQGSvi5LmEAgWbu7D/FoQ5eVKfjkfd/97n/fH/iXymqYyWqY+VtGTTO6y7GNEWdllLPucmyn5eS8w97qZRuGJw5EBUpEwJ6Y8lK1fZxfCPh231r/0zsyTLwqovIhdFJ9kU9AzFlAJGZWXypZkL/xApAQEVsKfhHABGA8wcJmZk9DWDdqsPXmy8O6MrpZ2AQgCOG0md442sMgrCOoraf3fuRjwMJOZjkUR0FFyL5ESFxvrS5GmiBI+jS9frgXxDsiVBRUX6iTJ3eOc6ntdO1AvBOhBQBCSDBnMEvvv6/dBoCN+bzjceIIsQQBAArINcqJYQwXQVsQoIBSTFUFpKUf7ycAsOEqTrNkizoICAigAtAZE6l3UMoWhkCKL9P7sD/qR0dRxyguEjLqTACCgW0BgJsvv+6K1nWAoAgRkL69W03/bHvzw5WGMtIAi6V4cvfR/KcH48BKu9+69eqQK51+4+xqR9o+uNp4djDL7Y/XWucGVl8fzU27PNLzz3MXZv6vfgHIKbruEqvkqAAAAABJRU5ErkJggg==" type="image/png">' \
+    + "\n<link rel=\"stylesheet\" href=\"https://unpkg.com/@primer/css@20.8.3/dist/primer.css\">" \
+    + "\n</head>\n<body><div class=\"container-lg px-3 my-5 markdown-body\">" \
+    + "\n<h1>${env.COMPANY_NAME} ${product} - ${env.BRANCH_NAME} - ${env.BUILD_NUMBER}</h1>" \
+    + "\n<p class =\"color-fg-muted\">${now}</p>"
   data.groupBy { it.platform }.sort().each { platform, types ->
     text += "\n<h2>${platform}</h2>\n<dl>"
     types.groupBy { it.type }.each { type, files ->
