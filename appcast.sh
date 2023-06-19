@@ -49,29 +49,25 @@ parse_params() {
 }
 
 s3_md5() {
-  $AWS s3api head-object --bucket $S3_BUCKET --key $1 \
+  $aws s3api head-object --bucket $S3_BUCKET --key $1 \
     --query 'Metadata.md5' --output text \
     2> /dev/null || true
 }
 
 parse_params "$@"
 
-REPO_OWNER=ASC-OFFICE
-REPO_NAME=r7
-REPO_CHANGES_PATH=desktop-apps/win-linux/package/windows/update/changes
 S3_BUCKET=test-repo-r7
 PACKAGE_NAME=R7-Office
 DATE=$(LANG=C date -u "+%b %d %H:%M UTC %Y")
-AWS="aws --endpoint-url=https://s3.storage.selcloud.ru"
+aws="aws --endpoint-url=https://s3.storage.selcloud.ru"
 
-rm -rfv update
+rm -rfv update repo
 mkdir -pv update
 
 msg "Download changelog"
-pushd update
-wget -nv https://raw.githubusercontent.com/$REPO_OWNER/$REPO_NAME/$BRANCH_NAME/$REPO_CHANGES_PATH/$VERSION/changes.html
-# wget -nv https://raw.githubusercontent.com/$REPO_OWNER/$REPO_NAME/$BRANCH_NAME/$REPO_CHANGES_PATH/$VERSION/changes_ru.html
-popd
+git clone -b $BRANCH_NAME -n --depth=1 git@github.com:ASC-OFFICE/r7.git repo
+git -C repo checkout HEAD desktop-apps/win-linux/package/windows/update/changes
+cp -fv repo/desktop-apps/win-linux/package/windows/update/changes/$VERSION/*.html update/
 
 msg "Make appcast"
 BASE_URL=https://244617.selcdn.ru/test-repo-r7
@@ -88,8 +84,7 @@ cat > update/appcast.json << EOF
   "version": "$VERSION.$BUILD",
   "date": "$DATE",
   "releaseNotes": {
-    "en-EN": "$CHANGES_URL/changes.html",
-    "ru-RU": "$CHANGES_URL/changes_ru.html"
+    "en-EN": "$CHANGES_URL/changes.html"
   },
   "package": {
     "win_64": {
@@ -137,7 +132,7 @@ cat > update/appcast.json << EOF
 EOF
 
 msg "Upload"
-$AWS s3 sync --no-progress --acl public-read update \
+$aws s3 sync --no-progress --acl public-read update \
   s3://$S3_BUCKET/desktop/win/update/$VERSION/$BUILD
 
 msg "Make deploy.json"
