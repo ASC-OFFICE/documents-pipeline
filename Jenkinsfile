@@ -54,8 +54,8 @@ pipeline {
     SUPPORT_URL = 'http://support.r7-office.ru'
     SUPPORT_MAIL = 'support@r7-office.ru'
     ASTRALINUX_SIGN_IMAGE = 'r7office/astra-sign-app'
-    BUILD_CHANNEL = defaults.channel
-    PRODUCT_VERSION = defaults.version
+    BUILD_CHANNEL = "${defaults.channel}"
+    PRODUCT_VERSION = "${defaults.version}"
     TELEGRAM_TOKEN = credentials('telegram-bot-token')
     S3_ENDPOINT_URL = 'https://s3.storage.selcloud.ru'
     S3_BUCKET = 'test-repo-r7'
