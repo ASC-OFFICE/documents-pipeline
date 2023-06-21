@@ -23,11 +23,9 @@ defaults = [
   password:         true,
   beta:             false,
   sign:             true,
-  schedule:         'H 17 * * *'.
-]
-brandingRepo = [
-  owner:            'ASC-OFFICE',
-  name:             'r7',
+  schedule:         'H 17 * * *',
+  repo_owner:       'ASC-OFFICE',
+  repo_name:        'r7',
 ]
 
 if (env.BRANCH_NAME == 'develop') {
@@ -35,6 +33,7 @@ if (env.BRANCH_NAME == 'develop') {
     channel:          'nightly',
     darwin_x86_64:    false,
     darwin_arm64:     false,
+    linux_x86_64_cef: false,
     beta:             true,
   ])
 }
@@ -49,23 +48,18 @@ if (env.BRANCH_NAME ==~ /^(hotfix|release)\/.+/) {
 pipeline {
   agent none
   environment {
-    COMPANY_NAME = "R7-Office"
-    APPLICATION_NAME = "R7-Office"
+    COMPANY_NAME = 'R7-Office'
     PUBLISHER_NAME = 'AO "R7"'
-    PUBLISHER_URL = "http://r7-office.ru"
-    SUPPORT_URL = "http://support.r7-office.ru"
-    SUPPORT_MAIL = "support@r7-office.ru"
-    ASTRALINUX_SIGN_IMAGE = "r7office/astra-sign-app"
-    RELEASE_BRANCH = "${defaults.branch}"
-    BUILD_CHANNEL = "${defaults.channel}"
-    PRODUCT_VERSION = "${defaults.version}"
+    PUBLISHER_URL = 'http://r7-office.ru'
+    SUPPORT_URL = 'http://support.r7-office.ru'
+    SUPPORT_MAIL = 'support@r7-office.ru'
+    ASTRALINUX_SIGN_IMAGE = 'r7office/astra-sign-app'
+    BUILD_CHANNEL = defaults.channel
+    PRODUCT_VERSION = defaults.version
     TELEGRAM_TOKEN = credentials('telegram-bot-token')
-    S3_ENDPOINT_URL = "https://s3.storage.selcloud.ru"
-    S3_BUCKET = "test-repo-r7"
-    S3_BASE_URL = "https://244617.selcdn.ru/test-repo-r7"
-    AWS_DEFAULT_REGION = "ru-1"
-    AWS_ACCESS_KEY_ID = credentials('aws-access-key-id')
-    AWS_SECRET_ACCESS_KEY = credentials('aws-secret-access-key')
+    S3_ENDPOINT_URL = 'https://s3.storage.selcloud.ru'
+    S3_BUCKET = 'test-repo-r7'
+    S3_BASE_URL = 'https://244617.selcdn.ru/test-repo-r7'
   }
   options {
     checkoutToSubdirectory 'documents-pipeline'
@@ -541,7 +535,7 @@ pipeline {
 // Stages
 
 void start(String platform) {
-  echo "PLATFORM=" + platform + "\nNODE_NAME=" + env.NODE_NAME
+  echo 'PLATFORM=' + platform + '\nNODE_NAME=' + env.NODE_NAME
 
   if (params.wipe)
     deleteDir()
@@ -555,7 +549,7 @@ void start(String platform) {
 }
 
 void startWindows(String platform) {
-  ArrayList varRepos = getVarRepos(platform, brandingRepo.name)
+  ArrayList varRepos = getVarRepos(platform, defaults.repo_name)
   checkoutRepos(varRepos)
 
   // buildArtifacts(platform, 'opensource')
@@ -566,7 +560,7 @@ void startWindows(String platform) {
 }
 
 void startDarwin(String platform) {
-  ArrayList varRepos = getVarRepos(platform, brandingRepo.name)
+  ArrayList varRepos = getVarRepos(platform, defaults.repo_name)
   checkoutRepos(varRepos)
 
   // buildArtifacts(platform, 'opensource')
@@ -580,7 +574,7 @@ void startDarwin(String platform) {
 
 void startLinux(String platform) {
   ArrayList constRepos = getConstRepos()
-  ArrayList varRepos = getVarRepos(platform, brandingRepo.name)
+  ArrayList varRepos = getVarRepos(platform, defaults.repo_name)
   ArrayList allRepos = constRepos.plus(varRepos)
   checkoutRepos(varRepos)
 
@@ -590,23 +584,23 @@ void startLinux(String platform) {
   buildArtifacts(platform, 'commercial')
   buildPackages(platform, 'commercial')
 
-  // if ((platform == 'linux_x86_64') && (params.server_ce || params.server_ee || params.server_de)) {
-  //   buildDocker()
-  //   tagRepos(allRepos)
-  // }
-
-  if (env.COMPANY_NAME != 'ONLYOFFICE' && platform == "linux_x86_64") {
-    ArrayList buildDockerServer = []
-    if (params.server_ee) buildDockerServer.add("-ee")
-    if (params.server_de) buildDockerServer.add("-de")
-    buildDockerServer.each {
-      sh label: "DOCKER DOCUMENTSERVER" + it.toUpperCase(), script: """
-        cd Docker-DocumentServer
-        make clean
-        make deploy -e PRODUCT_EDITION=${it} -e ONLYOFFICE_VALUE=ds \
-          -e PACKAGE_VERSION=\$PRODUCT_VERSION-\$BUILD_NUMBER \
-          -e PACKAGE_BASEURL=\$S3_BASE_URL/server/linux/debian
-      """
+  if ((platform == 'linux_x86_64') && (params.server_ce || params.server_ee || params.server_de)) {
+    if (env.COMPANY_NAME == 'ONLYOFFICE') {
+      buildDocker()
+      tagRepos(allRepos)
+    } else {
+      ArrayList buildDockerServer = []
+      if (params.server_ee) buildDockerServer.add('-ee')
+      if (params.server_de) buildDockerServer.add('-de')
+      buildDockerServer.each {
+        sh label: 'DOCKER DOCUMENTSERVER' + it.toUpperCase(), script: """
+          cd Docker-DocumentServer
+          make clean
+          make deploy -e PRODUCT_EDITION=${it} -e ONLYOFFICE_VALUE=ds \
+            -e PACKAGE_VERSION=\$PRODUCT_VERSION-\$BUILD_NUMBER \
+            -e PACKAGE_BASEURL=\$S3_BASE_URL/server/linux/debian
+        """
+      }
     }
   }
 }
@@ -627,14 +621,14 @@ void buildArtifacts(String platform, String license = 'opensource') {
 
   ArrayList args = []
   args.add("--module \"${modules.join(' ')}\"")
-  args.add("--platform ${platformBuild(platform)}")
+  args.add("--platform ${getPrefix(platform)}")
   args.add("--update false")
   args.add("--clean ${params.clean.toString()}")
   args.add("--qt-dir ${env.QT_PATH}")
   if (platform in ["windows_x64_xp", "windows_x86_xp"])
     args.add("--qt-dir-xp ${env.QT56_PATH}")
   if (license == "commercial")
-    args.add("--branding ${brandingRepo.name}")
+    args.add("--branding ${defaults.repo_name}")
   if (platform in ["windows_x64", "windows_x86"])
     args.add("--vs-version 2019")
   if (platform == "darwin_x86_64_v8")
@@ -651,7 +645,7 @@ void buildArtifacts(String platform, String license = 'opensource') {
     args.add(params.extra_args)
 
   String label = "artifacts ${license}".toUpperCase()
-  if (platformIsUnix(platform)) {
+  if (!platform.startsWith('windows')) {
     sh label: label, script: """
       cd build_tools
       ./configure.py ${args.join(' ')}
@@ -680,10 +674,10 @@ void buildPackages(String platform, String license = 'opensource') {
     "--build ${env.BUILD_NUMBER}",
   ]
   if (env.COMPANY_NAME != 'ONLYOFFICE')
-    args.add("--branding ${brandingRepo.name}")
+    args.add("--branding ${defaults.repo_name}")
 
   String label = "packages ${license}".toUpperCase()
-  if (platformIsUnix(platform))
+  if (!platform.startsWith('windows'))
     sh label: label, script: """
       cd build_tools
       ./make_package.py ${args.join(' ')}
@@ -827,10 +821,26 @@ ArrayList getTargetList(String platform, String license = 'any') {
   return targets
 }
 
+String getPrefix(String platform) {
+  return [
+    windows_x64:      'win_64',
+    windows_x86:      'win_32',
+    windows_x64_xp:   'win_64_xp',
+    windows_x86_xp:   'win_32_xp',
+    darwin_x86_64:    'mac_64',
+    darwin_arm64:     'mac_arm64',
+    darwin_x86_64_v8: 'mac_64',
+    linux_x86_64:     'linux_64',
+    linux_aarch64:    'linux_arm64',
+    linux_x86_64_cef: 'linux_64',
+    android:          'android',
+  ][platform]
+}
+
 // Docker
 
 void buildDocker() {
-  sh label: "DOCKER RUN", script: """
+  sh label: 'DOCKER RUN', script: """
     gh workflow run 4testing-build.yml \
       --repo ONLYOFFICE/Docker-DocumentServer \
       --ref \$BRANCH_NAME \
@@ -844,7 +854,7 @@ void buildDocker() {
 }
 
 void checkDocker() {
-  sh label: "DOCKER CHECK", script: """
+  sh label: 'DOCKER CHECK', script: """
     REPO=ONLYOFFICE/Docker-DocumentServer
     sleep 5
     RUN_ID=\$(gh run list --repo \$REPO --workflow 4testing-build.yml \
@@ -858,8 +868,8 @@ void checkDocker() {
 
 def getConstRepos(String branch = env.BRANCH_NAME) {
   return [
-    [owner: 'ONLYOFFICE',       name: 'build_tools'],
-    [owner: brandingRepo.owner, name: brandingRepo.name]
+    [owner: 'ONLYOFFICE',        name: 'build_tools'],
+    [owner: defaults.repo_owner, name: defaults.repo_name]
   ].each {
     it.branch = branch
   }
@@ -871,11 +881,11 @@ def getVarRepos(String platform, String branding = '', String branch = env.BRANC
   ArrayList modules = getModuleList(platform)
   ArrayList args = []
   if (modules)             args.add("--module \"${modules.join(' ')}\"")
-  if (!platform.isEmpty()) args.add("--platform ${platformBuild(platform)}")
+  if (!platform.isEmpty()) args.add("--platform ${getPrefix(platform)}")
   if (!branding.isEmpty()) args.add("--branding ${branding}")
 
   String reposOutput
-  if (platformIsUnix(platform)) {
+  if (!platform.startsWith('windows')) {
     reposOutput = sh label: "REPOS PRINT", returnStdout: true, script: """
       cd build_tools/scripts/develop
       ./print_repositories.py ${args.join(' ')}
@@ -928,7 +938,7 @@ void checkoutRepo(String repo, String branch = 'master') {
       extensions: [
         [$class: 'AuthorInChangelog'],
         [$class: 'RelativeTargetDirectory', relativeTargetDir: repo.minus(~/^.+\//)],
-        [$class: 'ScmName', name: "${repo}"],
+        [$class: 'ScmName', name: repo],
         [$class: 'SubmoduleOption', recursiveSubmodules: true]
       ],
       submoduleCfg: [],
@@ -938,15 +948,15 @@ void checkoutRepo(String repo, String branch = 'master') {
 }
 
 void checkoutRepos(ArrayList repos) {
-  echo repos.collect({"${it.owner}/${it.name} (${it.branch})"}).join("\n")
+  echo repos.collect({"${it.owner}/${it.name} (${it.branch})"}).join('\n')
   repos.each {
-    checkoutRepo(it.owner + "/" + it.name, it.branch)
+    checkoutRepo(it.owner + '/' + it.name, it.branch)
   }
 }
 
 void tagRepos(ArrayList repos, String tag = gitTag) {
   repos.each {
-    if (it.name != "onlyoffice.github.io")
+    if (it.name != 'onlyoffice.github.io')
       sh label: "REPO TAG: ${it.name}", script: """
         cd ${it.name}
         git tag -l | xargs git tag -d
@@ -957,28 +967,6 @@ void tagRepos(ArrayList repos, String tag = gitTag) {
   }
 }
 
-// Other
-
-String platformBuild(String platform) {
-  return [
-    windows_x64:      'win_64',
-    windows_x86:      'win_32',
-    windows_x64_xp:   'win_64_xp',
-    windows_x86_xp:   'win_32_xp',
-    darwin_x86_64:    'mac_64',
-    darwin_arm64:     'mac_arm64',
-    darwin_x86_64_v8: 'mac_64',
-    linux_x86_64:     'linux_64',
-    linux_aarch64:    'linux_arm64',
-    linux_x86_64_cef: 'linux_64',
-    android:          'android',
-  ][platform]
-}
-
-Boolean platformIsUnix(String platform) {
-  return !platform.startsWith('windows')
-}
-
 // Post Actions
 
 void buildAppcast() {
@@ -987,8 +975,8 @@ void buildAppcast() {
     string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
     string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
   ]) {
-    sh label: "APPCAST", returnStatus: true,
-      script: "./appcast.sh -a \$PRODUCT_VERSION -b \$BUILD_NUMBER -r \$BRANCH_NAME"
+    sh label: 'APPCAST', returnStatus: true,
+      script: './appcast.sh'
   }
   if (fileExists('deploy.json')) deployData += readJSON(file: 'deploy.json')
 }
@@ -1060,7 +1048,7 @@ void publishReport(String title, Map files) {
 
 def getHtml(String product, ArrayList data) {
   String text, url
-  String now = new Date().format("yyyy-MM-dd HH:mm")
+  String now = new Date().format('yyyy-MM-dd HH:mm', TimeZone.getTimeZone('Europe/Moscow'))
   Closure size = {
     return sh (script: "LANG=C numfmt --to=iec-i ${it}", returnStdout: true).trim()
   }
@@ -1071,7 +1059,7 @@ def getHtml(String product, ArrayList data) {
     + "\n<link rel=\"stylesheet\" href=\"https://unpkg.com/@primer/css@20.8.3/dist/primer.css\">" \
     + "\n</head>\n<body><div class=\"container-lg px-3 my-5 markdown-body\">" \
     + "\n<h1>${env.COMPANY_NAME} ${product} - ${env.BRANCH_NAME} - ${env.BUILD_NUMBER}</h1>" \
-    + "\n<p class =\"color-fg-muted\">${now}</p>"
+    + "\n<p class =\"color-fg-muted\">${now} MSK</p>"
   data.groupBy { it.platform }.sort().each { platform, types ->
     text += "\n<h2>${platform}</h2>\n<dl>"
     types.groupBy { it.type }.each { type, files ->
@@ -1096,14 +1084,14 @@ void setStageStats(int status, String stageName = env.STAGE_NAME) {
 
 void sendTelegramMessage(String jobStatus, String chatId = '-1001773122025') {
   if (!params.notify) return
-  String text = "Build [" + currentBuild.fullDisplayName \
-      + "](" + currentBuild.absoluteUrl + ") " + jobStatus
-  ArrayList icons = ["🟢", "🟡", "🔴"]
+  String text = 'Build [' + currentBuild.fullDisplayName \
+      + '](' + currentBuild.absoluteUrl + ') ' + jobStatus
+  ArrayList icons = ['🟢', '🟡', '🔴']
   stageStats.sort().each { stage, code ->
-    text += "\n" + icons[code] + " " + stage.replaceAll('_','\\\\_')
+    text += '\n' + icons[code] + ' ' + stage.replaceAll('_','\\\\_')
   }
 
-  sh label: "TELEGRAM MESSAGE SEND", script: """
+  sh label: 'TELEGRAM MESSAGE SEND', script: """
     curl -X POST -s -S \
       -d chat_id=${chatId} \
       -d parse_mode=markdown \
