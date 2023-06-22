@@ -976,7 +976,10 @@ void buildAppcast() {
     string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
   ]) {
     sh label: 'APPCAST', returnStatus: true,
-      script: './appcast.sh'
+      script: '''
+        export AWS_DEFAULT_REGION=ru-1
+        ./appcast.sh
+      '''
   }
   if (fileExists('deploy.json')) deployData += readJSON(file: 'deploy.json')
 }
@@ -1035,6 +1038,7 @@ void publishReport(String title, Map files) {
       string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
     ]) {
       sh label: 'REPORTS UPLOAD', returnStatus: true, script: """
+        export AWS_DEFAULT_REGION=ru-1
         aws --endpoint-url=\$S3_ENDPOINT_URL s3 cp --no-progress --acl public-read \
           ${it.key} s3://\$S3_BUCKET/reports/\$BRANCH_NAME/\$BUILD_NUMBER/
         echo "\$S3_BASE_URL/reports/\$BRANCH_NAME/\$BUILD_NUMBER/${it.key}"
