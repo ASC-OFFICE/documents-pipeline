@@ -103,9 +103,6 @@ cat > update/appcast.xml << EOF
       <sparkle:releaseNotesLink>
         $CHANGES_URL/changes.html
       </sparkle:releaseNotesLink>
-      <sparkle:releaseNotesLink xml:lang="ru-RU">
-        $CHANGES_URL/changes_ru.html
-      </sparkle:releaseNotesLink>
       <enclosure url="$UPDATES_URL/editors_update_x64.exe"
                  sparkle:os="windows-x64"
                  sparkle:version="$PRODUCT_VERSION.$BUILD_NUMBER"
@@ -119,9 +116,6 @@ cat > update/appcast.xml << EOF
       <pubDate>$DATE_XML</pubDate>
       <sparkle:releaseNotesLink>
         $CHANGES_URL/changes.html
-      </sparkle:releaseNotesLink>
-      <sparkle:releaseNotesLink xml:lang="ru-RU">
-        $CHANGES_URL/changes_ru.html
       </sparkle:releaseNotesLink>
       <enclosure url="$UPDATES_URL/editors_update_x86.exe"
                  sparkle:os="windows-x86"
