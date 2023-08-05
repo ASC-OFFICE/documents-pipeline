@@ -689,7 +689,8 @@ void buildPackages(String platform, String license = 'opensource') {
       python make_package.py ${args.join(' ')}
     """
 
-  if (fileExists('deploy.json')) deployData += readJSON(file: 'deploy.json')
+  if (fileExists('deploy.txt')) deployData += readFile('deploy.txt').readLines()
+  println deployData
 }
 
 ArrayList getModuleList(String platform, String license = 'any') {
@@ -763,58 +764,58 @@ ArrayList getTargetList(String platform, String license = 'any') {
   ]
   LinkedHashMap map = [
     windows_x64: [
-      'core': false,
-      'desktop': p.desktop && l.com,
-      'builder': p.builder && l.com,
-      'server-community': false,
-      'server-developer': p.server_de && l.com,
-      'server-enterprise': p.server_ee && l.com,
+      core: false,
+      desktop: p.desktop && l.com,
+      builder: p.builder && l.com,
+      server_community: false,
+      server_developer: p.server_de && l.com,
+      server_enterprise: p.server_ee && l.com,
     ],
     windows_x86: [
-      'core': false,
-      'desktop': p.desktop && l.com,
-      'builder': p.builder && l.com,
+      core: false,
+      desktop: p.desktop && l.com,
+      builder: p.builder && l.com,
     ],
     windows_x64_xp: [
-      'desktop': p.desktop && l.com,
+      desktop: p.desktop && l.com,
     ],
     windows_x86_xp: [
-      'desktop': p.desktop && l.com,
+      desktop: p.desktop && l.com,
     ],
     darwin_x86_64: [
-      'core': false,
-      'desktop': p.desktop && l.com,
-      'builder': false,
+      core: false,
+      desktop: p.desktop && l.com,
+      builder: false,
     ],
     darwin_arm64: [
-      'core': false,
-      'desktop': p.desktop && l.com,
-      'builder': false,
+      core: false,
+      desktop: p.desktop && l.com,
+      builder: false,
     ],
     darwin_x86_64_v8: [
-      'desktop': p.desktop && l.com,
+      desktop: p.desktop && l.com,
     ],
     linux_x86_64: [
-      'core': false,
-      'closure-maps-os': false,
-      'closure-maps-com': l.com,
-      'desktop': p.desktop && l.com,
-      'builder': p.builder && l.com,
-      'server-community': false,
-      'server-developer': p.server_de && l.com,
-      'server-enterprise': p.server_ee && l.com,
+      core: false,
+      closuremaps_opensource: false,
+      closuremaps_commercial: l.com,
+      desktop: p.desktop && l.com,
+      builder: p.builder && l.com,
+      server_community: false,
+      server_developer: p.server_de && l.com,
+      server_enterprise: p.server_ee && l.com,
     ],
     linux_aarch64: [
-      'builder': p.builder && l.com,
-      'server-community': false,
-      'server-developer': p.server_de && l.com,
-      'server-enterprise': p.server_ee && l.com,
+      builder: p.builder && l.com,
+      server_community: false,
+      server_developer: p.server_de && l.com,
+      server_enterprise: p.server_ee && l.com,
     ],
     linux_x86_64_cef: [
-      'desktop': p.desktop && l.com,
+      desktop: p.desktop && l.com,
     ],
     android: [
-      'mobile': false,
+      mobile: false,
     ],
   ]
   ArrayList targets = []
@@ -981,35 +982,27 @@ void buildAppcast() {
     string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
     string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
   ]) {
-    sh label: 'APPCAST', returnStatus: true,
-      script: '''
-        export AWS_DEFAULT_REGION=ru-1
-        ./appcast.sh
-      '''
+    Integer ret = sh label: 'APPCAST', returnStatus: true,
+      script: 'export AWS_DEFAULT_REGION=ru-1 && ./appcast.sh'
+    println ret
   }
-  if (fileExists('deploy.json')) deployData += readJSON(file: 'deploy.json')
+  if (fileExists('deploy.txt')) deployData += readFile('deploy.txt').readLines()
+  println deployData
 }
 
 void buildReports() {
-  writeJSON json: deployData, file: 'deploy.json', pretty: 2
+  println deployData
+  writeFile file: 'keys.txt', text: deployData.join('\n') + '\n'
   withCredentials([
     string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
     string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
   ]) {
-    def ret = sh label: 'REPORTS', returnStatus: true,
-      script: './reports.sh deploy.json'
+    Integer ret = sh label: 'REPORTS', returnStatus: true,
+      script: 'export AWS_DEFAULT_REGION=ru-1 && ./reports.sh keys.txt'
     println ret
   }
 
-  ArrayList links = []
-  if (fileExists('reports/core.html'))    links.add('core')
-  if (fileExists('reports/desktop.html')) links.add('desktop')
-  if (fileExists('reports/builder.html')) links.add('builder')
-  if (fileExists('reports/server.html'))  links.add('server')
-  if (fileExists('reports/mobile.html'))  links.add('mobile')
-  currentBuild.description = links.collect( {
-    "<a href=\"${env.S3_BASE_URL}/reports/${env.BRANCH_NAME}/${env.BUILD_NUMBER}/${it}.html\" target=\"_blank\">${it}</a>"
-  } ).join(' /\n')
+  if (fileExists('build.html')) currentBuild.description = readFile 'build.html'
 }
 
 void setStageStats(int status, String stageName = env.STAGE_NAME) {
