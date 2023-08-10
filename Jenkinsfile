@@ -213,7 +213,6 @@ pipeline {
         script {
           if (params.signing) env.ENABLE_SIGNING=1
           branchDir = env.BRANCH_NAME.replaceAll(/\//,'_')
-          gitTag = "v${env.BUILD_VERSION}.${env.BUILD_NUMBER}"
           deployData = []
           stageStats = [:]
         }
@@ -401,6 +400,8 @@ pipeline {
             URPMI_RELEASE_SUFFIX = ".r9"
           }
           steps {
+            gitTag = "v${env.BUILD_VERSION}.${env.BUILD_NUMBER}"
+            gitTagRepos = []
             start('linux_x86_64')
           }
           post {
@@ -574,9 +575,7 @@ void startDarwin(String platform) {
 }
 
 void startLinux(String platform) {
-  ArrayList constRepos = getConstRepos()
   ArrayList varRepos = getVarRepos(platform, defaults.repo_name)
-  ArrayList allRepos = constRepos.plus(varRepos)
   checkoutRepos(varRepos)
 
   buildArtifacts(platform, 'opensource')
@@ -588,7 +587,7 @@ void startLinux(String platform) {
   if ((platform == 'linux_x86_64') && (params.server_ce || params.server_ee || params.server_de)) {
     if (env.COMPANY_NAME == 'ONLYOFFICE') {
       buildDocker()
-      tagRepos(allRepos)
+      tagRepos()
     } else {
       ArrayList buildDockerServer = []
       if (params.server_ee) buildDockerServer.add('-ee')
@@ -690,7 +689,6 @@ void buildPackages(String platform, String license = 'opensource') {
     """
 
   if (fileExists('deploy.txt')) deployData += readFile('deploy.txt').readLines()
-  println deployData
 }
 
 ArrayList getModuleList(String platform, String license = 'any') {
@@ -872,17 +870,18 @@ void checkDocker() {
 
 // Repos
 
-def getConstRepos(String branch = env.BRANCH_NAME) {
-  return [
+def getVarRepos(String platform, String branding = '', String branch = env.BRANCH_NAME) {
+  ArrayList constRepos = [
     [owner: 'ONLYOFFICE',        name: 'build_tools'],
     [owner: defaults.repo_owner, name: defaults.repo_name]
   ].each {
     it.branch = branch
+    if (platform == 'linux_x86_64') {
+      gitTagRepos.add(it.name)
+    }
   }
-}
 
-def getVarRepos(String platform, String branding = '', String branch = env.BRANCH_NAME) {
-  checkoutRepos(getConstRepos())
+  checkoutRepos(constRepos)
 
   ArrayList modules = getModuleList(platform)
   ArrayList args = []
@@ -905,10 +904,10 @@ def getVarRepos(String platform, String branding = '', String branch = env.BRANC
   }
 
   ArrayList repos = []
-  reposOutput.trim().readLines().sort().each { line ->
+  reposOutput.trim().readLines().sort().each {
     Map repo = [
       owner: 'ONLYOFFICE',
-      name: line,
+      name: it,
       branch: 'master'
     ]
     if (branch != 'master') {
@@ -925,6 +924,9 @@ def getVarRepos(String platform, String branding = '', String branch = env.BRANC
           targets: [branch, 'master']
         ).branches[0].name
       }
+    }
+    if (platform == 'linux_x86_64' && repo.name != 'onlyoffice.github.io') {
+      gitTagRepos.add(repo.name)
     }
 
     repos.add(repo)
@@ -961,17 +963,19 @@ void checkoutRepos(ArrayList repos) {
   }
 }
 
-void tagRepos(ArrayList repos, String tag = gitTag) {
-  repos.each {
-    if (it.name != 'onlyoffice.github.io')
-      sh label: "REPO TAG: ${it.name}", script: """
-        cd ${it.name}
+void tagRepos(ArrayList repos = gitTagRepos, String tag = gitTag) {
+  println tag
+  println repos
+  sh label: "TAG REPOS", script: """
+    for repo in ${repos.join(' ')}; do
+      cd \$repo
         git tag -l | xargs git tag -d
         git fetch --tags
         git tag ${tag}
         git push origin --tags
-      """
-  }
+      cd ..
+    done
+  """
 }
 
 // Post Actions
@@ -987,10 +991,10 @@ void buildAppcast() {
     println ret
   }
   if (fileExists('deploy.txt')) deployData += readFile('deploy.txt').readLines()
-  println deployData
 }
 
 void buildReports() {
+  if (!deployData) return
   println deployData
   writeFile file: 'keys.txt', text: deployData.join('\n') + '\n'
   withCredentials([
