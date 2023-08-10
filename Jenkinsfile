@@ -215,6 +215,8 @@ pipeline {
           branchDir = env.BRANCH_NAME.replaceAll(/\//,'_')
           deployData = []
           stageStats = [:]
+          gitTag = "v${env.BUILD_VERSION}.${env.BUILD_NUMBER}"
+          gitTagRepos = []
         }
       }
     }
@@ -400,8 +402,6 @@ pipeline {
             URPMI_RELEASE_SUFFIX = ".r9"
           }
           steps {
-            gitTag = "v${env.BUILD_VERSION}.${env.BUILD_NUMBER}"
-            gitTagRepos = []
             start('linux_x86_64')
           }
           post {
