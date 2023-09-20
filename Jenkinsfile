@@ -11,7 +11,6 @@ defaults = [
   darwin_x86_64_v8: false,
   linux_x86_64:     true,
   linux_aarch64:    false,
-  linux_x86_64_cef: true,
   android:          false,
   core:             false,
   desktop:          true,
@@ -33,7 +32,6 @@ if (env.BRANCH_NAME == 'develop') {
     channel:          'nightly',
     darwin_x86_64:    false,
     darwin_arm64:     false,
-    linux_x86_64_cef: false,
     beta:             true,
   ])
 }
@@ -128,11 +126,6 @@ pipeline {
       defaultValue: defaults.linux_aarch64
     )
     */
-    booleanParam (
-      name:         'linux_x86_64_cef',
-      description:  'Build Linux x86-64 cef107 targets',
-      defaultValue: defaults.linux_x86_64_cef
-    )
     // Android
     /*
     booleanParam (
@@ -435,31 +428,6 @@ pipeline {
           }
         }
         */
-        stage('Linux x86_64 CEF 107') {
-          agent { label 'linux_x86_64_cef' }
-          when {
-            expression { params.linux_x86_64_cef }
-            beforeAgent true
-          }
-          environment {
-            GITHUB_TOKEN = credentials('github-token')
-            TAR_RELEASE_SUFFIX = "-cef107"
-            DEB_RELEASE_SUFFIX = "~cef107"
-            DEB_ASTRA_RELEASE_SUFFIX = "~alse-cef107"
-            RPM_RELEASE_SUFFIX = "~cef107.el7"
-            APT_RPM_RELEASE_SUFFIX = "~cef107.p8"
-            URPMI_RELEASE_SUFFIX = "~cef107.r9"
-            USE_CEF107 = '1'
-          }
-          steps {
-            start('linux_x86_64_cef')
-          }
-          post {
-            success  { setStageStats(0) }
-            unstable { setStageStats(1) }
-            failure  { setStageStats(2) }
-          }
-        }
         // Android
         /*
         stage('Android') {
@@ -633,8 +601,6 @@ void buildArtifacts(String platform, String license = 'opensource') {
     args.add("--vs-version 2019")
   if (platform == "darwin_x86_64_v8")
     args.add("--config use_v8")
-  if (platform == "linux_x86_64_cef")
-    args.add("--config cef_version_107")
   if (platform == "android")
     args.add("--config release")
   if (params.password_protection)
@@ -738,9 +704,6 @@ ArrayList getModuleList(String platform, String license = 'any') {
       builder: p.builder && l.com,
       server: (p.server_de || p.server_ee) && l.com,
     ],
-    linux_x86_64_cef: [
-      desktop: p.desktop && l.com,
-    ],
     android: [
       mobile: false,
     ],
@@ -809,9 +772,6 @@ ArrayList getTargetList(String platform, String license = 'any') {
       server_developer: p.server_de && l.com,
       server_enterprise: p.server_ee && l.com,
     ],
-    linux_x86_64_cef: [
-      desktop: p.desktop && l.com,
-    ],
     android: [
       mobile: false,
     ],
@@ -836,7 +796,6 @@ String getPrefix(String platform) {
     darwin_x86_64_v8: 'mac_64',
     linux_x86_64:     'linux_64',
     linux_aarch64:    'linux_arm64',
-    linux_x86_64_cef: 'linux_64',
     android:          'android',
   ][platform]
 }
