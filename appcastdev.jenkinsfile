@@ -1,8 +1,14 @@
 pipeline {
   agent { label 'appcastdev' }
-  environment {
-    AWS_ACCESS_KEY_ID = credentials('aws-access-key-id')
-    AWS_SECRET_ACCESS_KEY = credentials('aws-secret-access-key')
+  options {
+    authorizationMatrix([
+      group(
+        name: 'ONLYOFFICE',
+        permissions: ['Job/Build', 'Job/Cancel', 'Job/Read', 'Job/Workspace']
+      )
+    ])
+    disableConcurrentBuilds()
+    skipDefaultCheckout true
   }
   parameters {
     string (
@@ -24,11 +30,15 @@ pipeline {
           } else {
             error("version is not defined")
           }
-          // sh """
-          //   aws s3 cp --no-progress --acl public-read \
-          //     s3://repo-doc-onlyoffice-com/desktop/win/update/${version}/${params.build}/appcast.json \
-          //     s3://static.teamlab.com/install/desktop/editors/windows/onlyoffice/appcastdev.json
-          // """
+          sh """
+            APPCAST_PATH=install/desktop/editors/windows/onlyoffice/appcastdev.json
+            aws s3 cp --no-progress --acl public-read --cache-control max-age=0 \
+              s3://repo-doc-onlyoffice-com/desktop/win/update/${version}/${params.build}/appcast.json \
+              s3://static.teamlab.com/\$APPCAST_PATH
+            aws cloudfront create-invalidation \
+              --distribution-id EK2IXZ2TWVZKC --paths /\$APPCAST_PATH
+            echo https://download.onlyoffice.com/\$APPCAST_PATH
+          """
         }
       }
     }

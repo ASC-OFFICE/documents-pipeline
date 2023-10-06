@@ -62,7 +62,7 @@ pipeline {
   options {
     buildDiscarder logRotator(daysToKeepStr: '30', artifactDaysToKeepStr: '30')
     checkoutToSubdirectory 'documents-pipeline'
-    timeout(activity: true, time: 3, unit: 'HOURS')
+    timeout(activity: true, time: 6, unit: 'HOURS')
   }
   parameters {
     booleanParam (
@@ -944,7 +944,8 @@ void tagRepos(ArrayList repos = gitTagRepos, String tag = gitTag) {
 // Post Actions
 
 void buildAppcast() {
-  if (!(params.desktop && (params.windows_x64 || params.windows_x86))) return
+  if (!(params.desktop && params.windows_x64 && params.windows_x86)) return
+  if (!(stageStats['Windows x64'] == 0 && stageStats['Windows x86'] == 0)) return
   try {
     sh label: 'APPCAST', script: './appcast.sh'
   } catch (err) {
@@ -955,7 +956,7 @@ void buildAppcast() {
 
 void buildReports() {
   if (!deployData) return
-  println deployData
+  println deployData.join('\n')
   writeFile file: 'keys.txt', text: deployData.join('\n') + '\n'
   try {
     sh label: 'REPORTS', script: './reports.sh keys.txt'
