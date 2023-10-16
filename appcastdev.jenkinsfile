@@ -3,7 +3,7 @@ pipeline {
   options {
     authorizationMatrix([
       group(
-        name: 'ONLYOFFICE',
+        name: 'ASC-OFFICE',
         permissions: ['Job/Build', 'Job/Cancel', 'Job/Read', 'Job/Workspace']
       )
     ])
@@ -40,21 +40,28 @@ pipeline {
 
           if (build > 0) {
             sh """
-              APPCAST_PATH=install/desktop/editors/windows/onlyoffice/appcastdev.json
-              aws s3 cp --no-progress --acl public-read --cache-control max-age=0 \
-                s3://repo-doc-onlyoffice-com/desktop/win/update/${version}/${build}/appcast.json \
-                s3://static.teamlab.com/\$APPCAST_PATH
-              aws cloudfront create-invalidation \
-                --distribution-id EK2IXZ2TWVZKC --paths /\$APPCAST_PATH
-              echo "URL: https://download.onlyoffice.com/\$APPCAST_PATH"
+              APPCAST_PATH=windows/updates/appcastdev.json
+              aws s3 cp --no-progress \
+                s3://test-repo-r7/desktop/win/update/${version}/${build}/appcast.json \
+                \${APPCAST_PATH##*/}
+              lftp download.r7-office.ru -e "\\
+                set ftp:ssl-protect-data true; \\
+                set ftp:ssl-force true; \\
+                set ssl:verify-certificate no; \\
+                put -O \${APPCAST_PATH%/*} \${APPCAST_PATH##*/}; \\
+                exit"
+              echo "URL: https://download.r7-office.ru/\$APPCAST_PATH"
             """
           } else {
             sh """
-              APPCAST_PATH=install/desktop/editors/windows/onlyoffice/appcastdev.json
-              aws s3 rm s3://static.teamlab.com/\$APPCAST_PATH
-              aws cloudfront create-invalidation \
-                --distribution-id EK2IXZ2TWVZKC --paths /\$APPCAST_PATH
-              echo "URL: https://download.onlyoffice.com/\$APPCAST_PATH"
+              APPCAST_PATH=windows/updates/appcastdev.json
+              lftp download.r7-office.ru -e "\\
+                set ftp:ssl-protect-data true; \\
+                set ftp:ssl-force true; \\
+                set ssl:verify-certificate no; \\
+                rm -f \${APPCAST_PATH}; \\
+                exit"
+              echo "URL: https://download.r7-office.ru/\$APPCAST_PATH"
             """
           }
         }
