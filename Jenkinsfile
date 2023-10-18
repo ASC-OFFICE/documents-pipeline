@@ -211,7 +211,7 @@ pipeline {
           stageStats = [:]
           gitTag = "v${env.BUILD_VERSION}.${env.BUILD_NUMBER}"
           gitTagRepos = []
-          linuxDockerRun = params.linux_x86_64 ^ params.linux_aarch64
+          linuxDockerRun = params.linux_x86_64
         }
       }
     }
