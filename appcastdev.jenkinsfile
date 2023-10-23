@@ -3,6 +3,10 @@ pipeline {
   options {
     authorizationMatrix([
       group(
+        name: 'ONLYOFFICE',
+        permissions: ['Job/Build', 'Job/Cancel', 'Job/Read', 'Job/Workspace']
+      ),
+      group(
         name: 'ASC-OFFICE',
         permissions: ['Job/Build', 'Job/Cancel', 'Job/Read', 'Job/Workspace']
       )
