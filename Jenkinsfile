@@ -22,7 +22,7 @@ defaults = [
   password:         true,
   beta:             false,
   sign:             true,
-  schedule:         'H 20 * * *',
+  schedule:         'H 6 * * *',
   repo_owner:       'ASC-OFFICE',
   repo_name:        'r7',
 ]
@@ -39,7 +39,7 @@ if (env.BRANCH_NAME ==~ /^(hotfix|release)\/.+/) {
   defaults.putAll([
     channel:          'test',
     version:          env.BRANCH_NAME.replaceAll(/.+\/v(?=[0-9.]+)/,''),
-    schedule:         'H 2 * * *',
+    schedule:         'H 12 * * *',
   ])
 }
 
