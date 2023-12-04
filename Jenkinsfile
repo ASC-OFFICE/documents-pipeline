@@ -211,7 +211,6 @@ pipeline {
           stageStats = [:]
           gitTag = "v${env.BUILD_VERSION}.${env.BUILD_NUMBER}"
           gitTagRepos = []
-          linuxDockerRun = params.linux_x86_64
         }
       }
     }
@@ -454,10 +453,17 @@ pipeline {
     always {
       node('built-in') {
         script {
-          deleteDir()
-          checkout scm
-          buildAppcast()
-          buildReports()
+          // parallel(
+          //   reports: {
+              deleteDir()
+              checkout scm
+              buildAppcast()
+              buildReports()
+          //   },
+          //   docker: {
+          //     buildDocker()
+          //   }
+          // )
         }
       }
     }
@@ -523,14 +529,9 @@ void startLinux(String platform) {
   buildArtifacts(platform, 'commercial')
   buildPackages(platform, 'commercial')
 
-  if (params.server_ce || params.server_ee || params.server_de) {
+  if (platform == 'linux_x86_64' && (params.server_ce || params.server_ee || params.server_de)) {
     if (env.COMPANY_NAME == 'ONLYOFFICE') {
-      if (platform == 'linux_x86_64')
-        tagRepos()
-      if (linuxDockerRun)
-        buildDocker()
-      else
-        linuxDockerRun = true
+      tagRepos()
     } else {
       ArrayList buildDockerServer = []
       if (params.server_ee) buildDockerServer.add('-ee')
@@ -783,6 +784,10 @@ String getPrefix(String platform) {
 // Docker
 
 void buildDocker() {
+  if (!(params.server_ce || params.server_ee || params.server_de))
+    return
+  if (!(stageStats['Linux x86_64'] == 0 || stageStats['Linux aarch64'] == 0))
+    return
   try {
     withCredentials([
       string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')
@@ -793,8 +798,8 @@ void buildDocker() {
           --repo \$repo \
           --ref \$BRANCH_NAME \
           -f build=\$BUILD_NUMBER \
-          -f amd64=${params.linux_x86_64} \
-          -f arm64=${params.linux_aarch64} \
+          -f amd64=${stageStats['Linux x86_64'] == 0} \
+          -f arm64=${stageStats['Linux aarch64'] == 0} \
           -f community=${params.server_ce} \
           -f enterprise=${params.server_ee} \
           -f developer=${params.server_de}
@@ -806,10 +811,10 @@ void buildDocker() {
       """
     }
   } catch (err) {
-    echo err
-    setStageStats(2, 'Linux Docker')
+    echo err.toString()
+    stageStats['Linux Docker'] = 2
   } finally {
-    if (!stageStats['Linux Docker']) setStageStats(0, 'Linux Docker')
+    if (!stageStats['Linux Docker']) stageStats['Linux Docker'] = 0
   }
 }
 
