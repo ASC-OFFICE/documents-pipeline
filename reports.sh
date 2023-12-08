@@ -182,10 +182,10 @@ done
 msg "${BOLD}${GREEN}UPLOAD${NOFORMAT}"
 
 if ls reports/*.html 2> /dev/null; then
-  aws s3 sync --no-progress --acl public-read \
+  aws s3 sync --no-progress \
     reports \
     s3://$S3_BUCKET/reports/$BRANCH_NAME/$BUILD_NUMBER
-  aws s3 sync --no-progress --acl public-read --delete \
+  aws s3 sync --no-progress --delete \
     s3://$S3_BUCKET/reports/$BRANCH_NAME/$BUILD_NUMBER \
     s3://$S3_BUCKET/reports/$BRANCH_NAME/latest
 
