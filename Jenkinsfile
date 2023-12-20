@@ -57,6 +57,7 @@ pipeline {
     PRODUCT_VERSION = "${defaults.version}"
     S3_BASE_URL = 'https://s3.eu-central-1.amazonaws.com/repo-doc-r7office-ru'
     S3_BUCKET = 'repo-doc-r7office-ru'
+    DOCKER_ORG = 'ascoffice'
   }
   options {
     buildDiscarder logRotator(daysToKeepStr: '30', artifactDaysToKeepStr: '30')
