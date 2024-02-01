@@ -22,7 +22,7 @@ defaults = [
   password:         true,
   beta:             false,
   sign:             true,
-  schedule:         'H 20 * * *',
+  schedule:         'H 6 * * *',
   repo_owner:       'ASC-OFFICE',
   repo_name:        'r7',
 ]
@@ -39,7 +39,7 @@ if (env.BRANCH_NAME ==~ /^(hotfix|release)\/.+/) {
   defaults.putAll([
     channel:          'test',
     version:          env.BRANCH_NAME.replaceAll(/.+\/v(?=[0-9.]+)/,''),
-    schedule:         'H 2 * * *',
+    schedule:         'H 6 * * *',
   ])
 }
 
@@ -55,9 +55,9 @@ pipeline {
     BUILD_CHANNEL = "${defaults.channel}"
     BUILD_VERSION = "${defaults.version}"
     PRODUCT_VERSION = "${defaults.version}"
-    S3_BASE_URL = 'https://244617.selcdn.ru/test-repo-r7'
-    S3_BUCKET = 'test-repo-r7'
-    S3_ENDPOINT_URL = 'https://s3.storage.selcloud.ru'
+    S3_BASE_URL = 'https://s3.eu-central-1.amazonaws.com/repo-doc-r7office-ru'
+    S3_BUCKET = 'repo-doc-r7office-ru'
+    DOCKER_ORG = 'ascoffice'
   }
   options {
     buildDiscarder logRotator(daysToKeepStr: '30', artifactDaysToKeepStr: '30')
@@ -211,7 +211,6 @@ pipeline {
           stageStats = [:]
           gitTag = "v${env.BUILD_VERSION}.${env.BUILD_NUMBER}"
           gitTagRepos = []
-          linuxDockerRun = params.linux_x86_64
         }
       }
     }
@@ -310,7 +309,7 @@ pipeline {
         }
         // macOS
         stage('macOS arm64') {
-          agent { label 'darwin_arm64' }
+          agent { label 'darwin_arm64_r7' }
           when {
             expression { params.darwin_arm64 }
             beforeAgent true
@@ -333,7 +332,7 @@ pipeline {
           }
         }
         stage('macOS x86_64') {
-          agent { label 'darwin_x86_64' }
+          agent { label 'darwin_x86_64_r7' }
           when {
             expression { params.darwin_x86_64 }
             beforeAgent true
@@ -454,10 +453,17 @@ pipeline {
     always {
       node('built-in') {
         script {
-          deleteDir()
-          checkout scm
-          buildAppcast()
-          buildReports()
+          // parallel(
+          //   reports: {
+              deleteDir()
+              checkout scm
+              buildAppcast()
+              buildReports()
+          //   },
+          //   docker: {
+          //     buildDocker()
+          //   }
+          // )
         }
       }
     }
@@ -523,14 +529,9 @@ void startLinux(String platform) {
   buildArtifacts(platform, 'commercial')
   buildPackages(platform, 'commercial')
 
-  if (params.server_ce || params.server_ee || params.server_de) {
+  if (platform == 'linux_x86_64' && (params.server_ce || params.server_ee || params.server_de)) {
     if (env.COMPANY_NAME == 'ONLYOFFICE') {
-      if (platform == 'linux_x86_64')
-        tagRepos()
-      if (linuxDockerRun)
-        buildDocker()
-      else
-        linuxDockerRun = true
+      tagRepos()
     } else {
       ArrayList buildDockerServer = []
       if (params.server_ee) buildDockerServer.add('-ee')
@@ -549,11 +550,11 @@ void startLinux(String platform) {
 }
 
 void startAndroid(String platform = 'android') {
-  ArrayList varRepos = getVarRepos(platform)
+  ArrayList varRepos = getVarRepos(platform, defaults.repo_name)
   checkoutRepos(varRepos)
 
-  buildArtifacts(platform, 'opensource')
-  buildPackages(platform, 'opensource')
+  buildArtifacts(platform, 'commercial')
+  buildPackages(platform, 'commercial')
 }
 
 // Build
@@ -783,6 +784,10 @@ String getPrefix(String platform) {
 // Docker
 
 void buildDocker() {
+  if (!(params.server_ce || params.server_ee || params.server_de))
+    return
+  if (!(stageStats['Linux x86_64'] == 0 || stageStats['Linux aarch64'] == 0))
+    return
   try {
     withCredentials([
       string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')
@@ -793,8 +798,8 @@ void buildDocker() {
           --repo \$repo \
           --ref \$BRANCH_NAME \
           -f build=\$BUILD_NUMBER \
-          -f amd64=${params.linux_x86_64} \
-          -f arm64=${params.linux_aarch64} \
+          -f amd64=${stageStats['Linux x86_64'] == 0} \
+          -f arm64=${stageStats['Linux aarch64'] == 0} \
           -f community=${params.server_ce} \
           -f enterprise=${params.server_ee} \
           -f developer=${params.server_de}
@@ -806,10 +811,10 @@ void buildDocker() {
       """
     }
   } catch (err) {
-    echo err
-    setStageStats(2, 'Linux Docker')
+    echo err.toString()
+    stageStats['Linux Docker'] = 2
   } finally {
-    if (!stageStats['Linux Docker']) setStageStats(0, 'Linux Docker')
+    if (!stageStats['Linux Docker']) stageStats['Linux Docker'] = 0
   }
 }
 
