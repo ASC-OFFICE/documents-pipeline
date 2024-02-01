@@ -39,7 +39,7 @@ if (env.BRANCH_NAME ==~ /^(hotfix|release)\/.+/) {
   defaults.putAll([
     channel:          'test',
     version:          env.BRANCH_NAME.replaceAll(/.+\/v(?=[0-9.]+)/,''),
-    schedule:         'H 12 * * *',
+    schedule:         'H 6 * * *',
   ])
 }
 
@@ -55,9 +55,9 @@ pipeline {
     BUILD_CHANNEL = "${defaults.channel}"
     BUILD_VERSION = "${defaults.version}"
     PRODUCT_VERSION = "${defaults.version}"
-    S3_BASE_URL = 'https://244617.selcdn.ru/test-repo-r7'
-    S3_BUCKET = 'test-repo-r7'
-    S3_ENDPOINT_URL = 'https://s3.storage.selcloud.ru'
+    S3_BASE_URL = 'https://s3.eu-central-1.amazonaws.com/repo-doc-r7office-ru'
+    S3_BUCKET = 'repo-doc-r7office-ru'
+    DOCKER_ORG = 'ascoffice'
   }
   options {
     buildDiscarder logRotator(daysToKeepStr: '30', artifactDaysToKeepStr: '30')
@@ -309,7 +309,7 @@ pipeline {
         }
         // macOS
         stage('macOS arm64') {
-          agent { label 'darwin_arm64' }
+          agent { label 'darwin_arm64_r7' }
           when {
             expression { params.darwin_arm64 }
             beforeAgent true
@@ -332,7 +332,7 @@ pipeline {
           }
         }
         stage('macOS x86_64') {
-          agent { label 'darwin_x86_64' }
+          agent { label 'darwin_x86_64_r7' }
           when {
             expression { params.darwin_x86_64 }
             beforeAgent true
@@ -550,11 +550,11 @@ void startLinux(String platform) {
 }
 
 void startAndroid(String platform = 'android') {
-  ArrayList varRepos = getVarRepos(platform)
+  ArrayList varRepos = getVarRepos(platform, defaults.repo_name)
   checkoutRepos(varRepos)
 
-  buildArtifacts(platform, 'opensource')
-  buildPackages(platform, 'opensource')
+  buildArtifacts(platform, 'commercial')
+  buildPackages(platform, 'commercial')
 }
 
 // Build
