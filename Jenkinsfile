@@ -22,9 +22,9 @@ defaults = [
   password:         true,
   beta:             false,
   sign:             true,
-  schedule:         'H 6 * * *',
-  repo_owner:       'ASC-OFFICE',
-  repo_name:        'r7',
+  schedule:         'H 20 * * *',
+  owner:            'ASC-OFFICE',
+  repo:             'r7',
 ]
 
 if (env.BRANCH_NAME == 'develop') {
@@ -235,6 +235,7 @@ pipeline {
             success  { setStageStats(0) }
             unstable { setStageStats(1) }
             failure  { setStageStats(2) }
+            aborted  { setStageStats(3) }
           }
         }
         stage('Windows x86') {
@@ -258,6 +259,7 @@ pipeline {
             success  { setStageStats(0) }
             unstable { setStageStats(1) }
             failure  { setStageStats(2) }
+            aborted  { setStageStats(3) }
           }
         }
         stage('Windows x64 XP') {
@@ -281,6 +283,7 @@ pipeline {
             success  { setStageStats(0) }
             unstable { setStageStats(1) }
             failure  { setStageStats(2) }
+            aborted  { setStageStats(3) }
           }
         }
         stage('Windows x86 XP') {
@@ -305,6 +308,7 @@ pipeline {
             success  { setStageStats(0) }
             unstable { setStageStats(1) }
             failure  { setStageStats(2) }
+            aborted  { setStageStats(3) }
           }
         }
         // macOS
@@ -329,6 +333,7 @@ pipeline {
             success  { setStageStats(0) }
             unstable { setStageStats(1) }
             failure  { setStageStats(2) }
+            aborted  { setStageStats(3) }
           }
         }
         stage('macOS x86_64') {
@@ -352,6 +357,7 @@ pipeline {
             success  { setStageStats(0) }
             unstable { setStageStats(1) }
             failure  { setStageStats(2) }
+            aborted  { setStageStats(3) }
           }
         }
         /*
@@ -376,6 +382,7 @@ pipeline {
             success  { setStageStats(0) }
             unstable { setStageStats(1) }
             failure  { setStageStats(2) }
+            aborted  { setStageStats(3) }
           }
         }
         */
@@ -401,6 +408,7 @@ pipeline {
             success  { setStageStats(0) }
             unstable { setStageStats(1) }
             failure  { setStageStats(2) }
+            aborted  { setStageStats(3) }
           }
         }
         /*
@@ -425,6 +433,7 @@ pipeline {
             success  { setStageStats(0) }
             unstable { setStageStats(1) }
             failure  { setStageStats(2) }
+            aborted  { setStageStats(3) }
           }
         }
         */
@@ -443,6 +452,7 @@ pipeline {
             success  { setStageStats(0) }
             unstable { setStageStats(1) }
             failure  { setStageStats(2) }
+            aborted  { setStageStats(3) }
           }
         }
         */
@@ -450,7 +460,19 @@ pipeline {
     }
   }
   post {
-    always {
+    fixed {
+      node('built-in') { script { sendTelegramMessage('fixed') } }
+    }
+    unstable {
+      node('built-in') { script { sendTelegramMessage('unstable') } }
+    }
+    failure {
+      node('built-in') { script { sendTelegramMessage('failure') } }
+    }
+    aborted {
+      node('built-in') { script { sendTelegramMessage('aborted') } }
+    }
+    cleanup {
       node('built-in') {
         script {
           // parallel(
@@ -467,19 +489,10 @@ pipeline {
         }
       }
     }
-    fixed {
-      node('built-in') { script { sendTelegramMessage('fixed') } }
-    }
-    unstable {
-      node('built-in') { script { sendTelegramMessage('unstable') } }
-    }
-    failure {
-      node('built-in') { script { sendTelegramMessage('failure') } }
-    }
   }
 }
 
-// Stages
+// Build
 
 void start(String platform) {
   echo 'PLATFORM=' + platform + '\nNODE_NAME=' + env.NODE_NAME
@@ -489,39 +502,9 @@ void start(String platform) {
   else if (params.clean && params.desktop && platform != 'android')
     dir ('desktop-apps') { deleteDir() }
 
-  if (platform.startsWith('windows')) startWindows(platform)
-  if (platform.startsWith('darwin'))  startDarwin(platform)
-  if (platform.startsWith('linux'))   startLinux(platform)
-  if (platform == 'android')          startAndroid(platform)
-}
+  if (!getModuleList(platform)) return
 
-void startWindows(String platform) {
-  ArrayList varRepos = getVarRepos(platform, defaults.repo_name)
-  checkoutRepos(varRepos)
-
-  buildArtifacts(platform, 'opensource')
-  buildPackages(platform, 'opensource')
-
-  buildArtifacts(platform, 'commercial')
-  buildPackages(platform, 'commercial')
-}
-
-void startDarwin(String platform) {
-  ArrayList varRepos = getVarRepos(platform, defaults.repo_name)
-  checkoutRepos(varRepos)
-
-  buildArtifacts(platform, 'opensource')
-  buildPackages(platform, 'opensource')
-
-  if (env.BRANCH_NAME ==~ /^(hotfix|release)\/.+/) {
-    buildArtifacts(platform, 'commercial')
-    buildPackages(platform, 'commercial')
-  }
-}
-
-void startLinux(String platform) {
-  ArrayList varRepos = getVarRepos(platform, defaults.repo_name)
-  checkoutRepos(varRepos)
+  resolveRepos(platform, defaults.repo)
 
   buildArtifacts(platform, 'opensource')
   buildPackages(platform, 'opensource')
@@ -549,16 +532,6 @@ void startLinux(String platform) {
   }
 }
 
-void startAndroid(String platform = 'android') {
-  ArrayList varRepos = getVarRepos(platform, defaults.repo_name)
-  checkoutRepos(varRepos)
-
-  buildArtifacts(platform, 'commercial')
-  buildPackages(platform, 'commercial')
-}
-
-// Build
-
 void buildArtifacts(String platform, String license = 'opensource') {
   ArrayList modules = getModuleList(platform, license)
   if (!modules) return
@@ -572,7 +545,7 @@ void buildArtifacts(String platform, String license = 'opensource') {
   if (platform in ["windows_x64_xp", "windows_x86_xp"])
     args.add("--qt-dir-xp ${env.QT56_PATH}")
   if (license == "commercial")
-    args.add("--branding ${defaults.repo_name}")
+    args.add("--branding ${defaults.repo}")
   if (platform in ["windows_x64", "windows_x86"])
     args.add("--vs-version 2019")
   if (platform == "darwin_x86_64_v8")
@@ -616,7 +589,7 @@ void buildPackages(String platform, String license = 'opensource') {
     "--build ${env.BUILD_NUMBER}",
   ]
   if (env.COMPANY_NAME != 'ONLYOFFICE')
-    args.add("--branding ${defaults.repo_name}")
+    args.add("--branding ${defaults.repo}")
 
   String label = "packages ${license}".toUpperCase()
 
@@ -638,9 +611,44 @@ void buildPackages(String platform, String license = 'opensource') {
   }
 }
 
+void buildDocker() {
+  if (!(params.server_ce || params.server_ee || params.server_de))
+    return
+  if (!(stageStats['Linux x86_64'] == 0 || stageStats['Linux aarch64'] == 0))
+    return
+  try {
+    withCredentials([
+      string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')
+    ]) {
+      sh label: 'DOCKER BUILD', script: """
+        repo=ONLYOFFICE/Docker-DocumentServer
+        gh workflow run 4testing-build.yml \
+          --repo \$repo \
+          --ref \$BRANCH_NAME \
+          -f build=\$BUILD_NUMBER \
+          -f amd64=${stageStats['Linux x86_64'] == 0} \
+          -f arm64=${stageStats['Linux aarch64'] == 0} \
+          -f community=${params.server_ce} \
+          -f enterprise=${params.server_ee} \
+          -f developer=${params.server_de}
+        sleep 5
+        run_id=\$(gh run list --repo \$repo --workflow 4testing-build.yml \
+          --branch \$BRANCH_NAME --json databaseId --jq '.[0].databaseId')
+        gh --repo \$repo run watch \$run_id --interval 15 > /dev/null
+        gh --repo \$repo run view \$run_id --verbose --exit-status
+      """
+    }
+  } catch (err) {
+    echo err.toString()
+    stageStats['Linux Docker'] = 2
+  } finally {
+    if (!stageStats['Linux Docker']) stageStats['Linux Docker'] = 0
+  }
+}
+
 ArrayList getModuleList(String platform, String license = 'any') {
   def p = params
-  LinkedHashMap l = [
+  Map l = [
     os: license in ['opensource', 'any'],
     com: license in ['commercial', 'any'],
   ]
@@ -665,15 +673,15 @@ ArrayList getModuleList(String platform, String license = 'any') {
     darwin_x86_64: [
       core: false,
       builder: false,
-      desktop: p.desktop && l.com,
+      desktop: p.desktop && l.com && (env.BRANCH_NAME ==~ /^(hotfix|release)\/.+/),
     ],
     darwin_arm64: [
       core: false,
       builder: false,
-      desktop: p.desktop && l.com,
+      desktop: p.desktop && l.com && (env.BRANCH_NAME ==~ /^(hotfix|release)\/.+/),
     ],
     darwin_x86_64_v8: [
-      desktop: p.desktop && l.com,
+      desktop: p.desktop && l.com && (env.BRANCH_NAME ==~ /^(hotfix|release)\/.+/),
     ],
     linux_x86_64: [
       core: false,
@@ -700,7 +708,7 @@ ArrayList getModuleList(String platform, String license = 'any') {
 
 ArrayList getTargetList(String platform, String license = 'any') {
   def p = params
-  LinkedHashMap l = [
+  Map l = [
     os: license in ['opensource', 'any'],
     com: license in ['commercial', 'any'],
   ]
@@ -726,21 +734,21 @@ ArrayList getTargetList(String platform, String license = 'any') {
     ],
     darwin_x86_64: [
       core: false,
-      desktop: p.desktop && l.com,
+      desktop: p.desktop && l.com && (env.BRANCH_NAME ==~ /^(hotfix|release)\/.+/),
       builder: false,
     ],
     darwin_arm64: [
       core: false,
-      desktop: p.desktop && l.com,
+      desktop: p.desktop && l.com && (env.BRANCH_NAME ==~ /^(hotfix|release)\/.+/),
       builder: false,
     ],
     darwin_x86_64_v8: [
-      desktop: p.desktop && l.com,
+      desktop: p.desktop && l.com && (env.BRANCH_NAME ==~ /^(hotfix|release)\/.+/),
     ],
     linux_x86_64: [
       core: false,
       closuremaps_opensource: false,
-      closuremaps_commercial: l.com,
+      closuremaps_commercial: (p.desktop || p.server_de || p.server_ee) && l.com,
       desktop: p.desktop && l.com,
       builder: p.builder && l.com,
       server_community: false,
@@ -781,57 +789,20 @@ String getPrefix(String platform) {
   ][platform]
 }
 
-// Docker
-
-void buildDocker() {
-  if (!(params.server_ce || params.server_ee || params.server_de))
-    return
-  if (!(stageStats['Linux x86_64'] == 0 || stageStats['Linux aarch64'] == 0))
-    return
-  try {
-    withCredentials([
-      string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')
-    ]) {
-      sh label: 'DOCKER BUILD', script: """
-        repo=ONLYOFFICE/Docker-DocumentServer
-        gh workflow run 4testing-build.yml \
-          --repo \$repo \
-          --ref \$BRANCH_NAME \
-          -f build=\$BUILD_NUMBER \
-          -f amd64=${stageStats['Linux x86_64'] == 0} \
-          -f arm64=${stageStats['Linux aarch64'] == 0} \
-          -f community=${params.server_ce} \
-          -f enterprise=${params.server_ee} \
-          -f developer=${params.server_de}
-        sleep 5
-        run_id=\$(gh run list --repo \$repo --workflow 4testing-build.yml \
-          --branch \$BRANCH_NAME --json databaseId --jq '.[0].databaseId')
-        gh --repo \$repo run watch \$run_id --interval 15 > /dev/null
-        gh --repo \$repo run view \$run_id --verbose --exit-status
-      """
-    }
-  } catch (err) {
-    echo err.toString()
-    stageStats['Linux Docker'] = 2
-  } finally {
-    if (!stageStats['Linux Docker']) stageStats['Linux Docker'] = 0
-  }
-}
-
 // Repos
 
-def getVarRepos(String platform, String branding = '', String branch = env.BRANCH_NAME) {
-  ArrayList constRepos = [
-    [owner: 'ONLYOFFICE',        name: 'build_tools'],
-    [owner: defaults.repo_owner, name: defaults.repo_name]
+void resolveRepos(String platform, String branding = '') {
+  ArrayList baseRepos = [
+    [owner: 'ONLYOFFICE',   repo: 'build_tools'],
+    [owner: defaults.owner, repo: defaults.repo]
   ].each {
-    it.branch = branch
+    it.branch = env.BRANCH_NAME
     if (platform == 'linux_x86_64') {
-      gitTagRepos.add(it.name)
+      gitTagRepos.add(it.repo)
     }
   }
 
-  checkoutRepos(constRepos)
+  checkoutRepos(baseRepos)
 
   ArrayList modules = getModuleList(platform)
   ArrayList args = []
@@ -855,61 +826,63 @@ def getVarRepos(String platform, String branding = '', String branch = env.BRANC
 
   ArrayList repos = []
   reposOutput.trim().readLines().sort().each {
-    Map repo = [
+    repos.add([
       owner: 'ONLYOFFICE',
-      name: it,
+      repo: it,
       branch: 'master'
-    ]
-    if (branch != 'master') {
+    ])
+  }
+  repos.each {
+    if (env.BRANCH_NAME != 'master') {
       int retryCount = 0
       retry(3) {
         if (retryCount > 0) sleep(60)
         retryCount++
-        repo.branch = resolveScm(
+        it.branch = resolveScm(
           source: [
             $class: 'GitSCMSource',
-            remote: "git@github.com:${repo.owner}/${repo.name}.git",
-            traits: [[$class: 'jenkins.plugins.git.traits.BranchDiscoveryTrait']]
+            remote: "git@github.com:${it.owner}/${it.repo}.git",
+            traits: [gitBranchDiscovery()]
           ],
-          targets: [branch, 'master']
+          targets: [env.BRANCH_NAME, 'master']
         ).branches[0].name
       }
     }
-    if (platform == 'linux_x86_64' && repo.name != 'onlyoffice.github.io') {
-      gitTagRepos.add(repo.name)
+    if (platform == 'linux_x86_64' && it.repo != 'onlyoffice.github.io') {
+      gitTagRepos.add(it.repo)
     }
-
-    repos.add(repo)
   }
 
-  return repos
-}
-
-void checkoutRepo(String repo, String branch = 'master') {
-  int retryCount = 0
-  retry(3) {
-    if (retryCount > 0) sleep(30)
-    retryCount++
-    checkout([
-      $class: 'GitSCM',
-      branches: [[name: 'refs/heads/' + branch]],
-      doGenerateSubmoduleConfigurations: false,
-      extensions: [
-        [$class: 'AuthorInChangelog'],
-        [$class: 'RelativeTargetDirectory', relativeTargetDir: repo.minus(~/^.+\//)],
-        [$class: 'ScmName', name: repo],
-        [$class: 'SubmoduleOption', recursiveSubmodules: true]
-      ],
-      submoduleCfg: [],
-      userRemoteConfigs: [[url: "git@github.com:${repo}.git"]]
-    ])
-  }
+  checkoutRepos(repos)
 }
 
 void checkoutRepos(ArrayList repos) {
-  echo repos.collect({"${it.owner}/${it.name} (${it.branch})"}).join('\n')
+  echo repos.collect({"${it.owner}/${it.repo} (${it.branch})"}).join('\n')
   repos.each {
-    checkoutRepo(it.owner + '/' + it.name, it.branch)
+    dir(it.repo) {
+      int retryCount = 0
+      retry(3) {
+        if (retryCount > 0) sleep(30)
+        retryCount++
+        checkout scmGit(
+          userRemoteConfigs: [[url: "git@github.com:${it.owner}/${it.repo}.git"]],
+          branches: [[name: 'refs/heads/' + it.branch]],
+          extensions: [
+            authorInChangelog(),
+            cloneOption(
+              noTags: true,
+              shallow: true,
+              depth: 1
+            ),
+            submodule(
+              recursiveSubmodules: true,
+              // shallow: true,
+              // depth: 1
+            )
+          ]
+        )
+      }
+    }
   }
 }
 
@@ -959,7 +932,7 @@ void sendTelegramMessage(String jobStatus, String chatId = '-1001773122025') {
   if (!params.notify) return
   String text = 'Build [' + currentBuild.fullDisplayName \
       + '](' + currentBuild.absoluteUrl + ') ' + jobStatus
-  ArrayList icons = ['🟢', '🟡', '🔴']
+  ArrayList icons = ['🟢', '🟡', '🔴', '⚫️']
   stageStats.sort().each { stage, code ->
     text += '\n' + icons[code] + ' ' + stage.replaceAll('_','\\\\_')
   }
